@@ -1,0 +1,27 @@
+  '          ' '  87 KM/H '   <- code - -  road: None
+  '   O1→    ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O1→ 300M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O1→ 100M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O1→ 40M  ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  '   O2↑    ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O2↑ 300M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O2↑ 100M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O2↑ 40M  ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  '   O3←    ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O3← 300M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O3← 100M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O3← 40M  ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  '   O4↓    ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O4↓ 300M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O4↓ 100M ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  ' O4↓ 40M  ' '  87 KM/H '   <- code 35 ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE  road: Kreiselstrasse
+  '    O3    ' '  87 KM/H '   <- code 34 ROUNDABOUT_ENTER_AND_EXIT_CCW  road: Ringstrasse
+  ' O3 250M  ' '  87 KM/H '   <- code 34 ROUNDABOUT_ENTER_AND_EXIT_CCW  road: Ringstrasse
+  ' O3 100M  ' '  87 KM/H '   <- code 34 ROUNDABOUT_ENTER_AND_EXIT_CCW  road: Ringstrasse
+  '   O2→    ' '  87 KM/H '   <- code 33 ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE  road: Ringstrasse
+  ' O2→ 250M ' '  87 KM/H '   <- code 33 ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE  road: Ringstrasse
+  ' O2→ 100M ' '  87 KM/H '   <- code 33 ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE  road: Ringstrasse
+  '    ←     ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Seitenstrasse
+  '  ← 500M  ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Seitenstrasse
+  '  ← 200M  ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Seitenstrasse
+  '          ' '  87 KM/H '   <- code - -  road: None

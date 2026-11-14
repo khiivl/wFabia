@@ -1,0 +1,22 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# real recordings of real drives: never commit
+golden-private/
+
+# secrets and local config
+local.properties
+*.jks
+*.keystore
+keystore.properties
+
+# build output / IDE
+.gradle/
+build/
+.idea/
+*.iml
+/captures/
+*.bin

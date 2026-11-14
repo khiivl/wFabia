@@ -1,0 +1,21 @@
+  '          ' '  87 KM/H '   <- code - -  road: None
+  '    ▶     ' '  87 KM/H '   <- code 1 DEPART  road: Musterweg
+  ' /→  A99  ' '  ↑↑(/)   '   <- code 4 KEEP_RIGHT  road: [A 99] [E 49] > Beispielstadt  lanes: 3
+  ' /→ 9.0K  ' '  ↑↑(/)   '   <- code 4 KEEP_RIGHT  road: [A 99] [E 49] > Beispielstadt  lanes: 3
+  ' /→ 6.2K  ' '  ↑↑(/)   '   <- code 4 KEEP_RIGHT  road: [A 99] [E 49] > Beispielstadt  lanes: 3
+  ' /→ 3.0K  ' '  ↑↑(/)   '   <- code 4 KEEP_RIGHT  road: [A 99] [E 49] > Beispielstadt  lanes: 3
+  ' /→  A99  ' '  87 KM/H '   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→ 1.9K  ' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→ 1.5K  ' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→ 900M  ' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→ 400M  ' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→ 150M  ' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  '/→ 60M A99' '12 KREUZ B'   <- code 24 OFF_RAMP_NORMAL_RIGHT  road: Ausfahrt 12 Kreuz Beispieldorf A 99
+  ' /→  B999 ' '  87 KM/H '   <- code 16 ON_RAMP_NORMAL_RIGHT  road: B 999 Teststrasse
+  ' /→ 800M  ' '  87 KM/H '   <- code 16 ON_RAMP_NORMAL_RIGHT  road: B 999 Teststrasse
+  ' /→ 300M  ' '  87 KM/H '   <- code 16 ON_RAMP_NORMAL_RIGHT  road: B 999 Teststrasse
+  '  /→ 90M  ' '  87 KM/H '   <- code 16 ON_RAMP_NORMAL_RIGHT  road: B 999 Teststrasse
+  '    ↑     ' '  87 KM/H '   <- code 36 STRAIGHT  road: Hauptstrasse
+  '  ↑ 4.5K  ' '  87 KM/H '   <- code 36 STRAIGHT  road: Hauptstrasse
+  '  ↑ 2.2K  ' '  87 KM/H '   <- code 36 STRAIGHT  road: Hauptstrasse
+  '          ' '  87 KM/H '   <- code - -  road: None

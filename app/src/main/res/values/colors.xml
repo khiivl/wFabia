@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholders for wDSP's colors.xml: swap the six group colours and the accent for the real values. -->
+<resources>
+    <color name="accent">#34C3B3</color>
+    <color name="on_accent">#06231F</color>
+    <color name="bg">#F4F6F9</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_2">#E9EDF2</color>
+    <color name="line">#C9D1DB</color>
+    <color name="text">#161C25</color>
+    <color name="muted">#5B6676</color>
+    <color name="warn">#B26B00</color>
+    <color name="bad">#C0392B</color>
+    <color name="g1">#D9534F</color>
+    <color name="g2">#9B59D0</color>
+    <color name="g3">#5C6BC0</color>
+    <color name="g4">#3F8FE0</color>
+    <color name="g5">#1E9BD6</color>
+    <color name="g6">#26A69A</color>
+    <color name="dot">#FF9A2E</color>
+    <color name="dot_bg">#120C06</color>
+    <color name="cluster_bg">#090604</color>
+    <color name="dot_off">#3A2A18</color>
+</resources>

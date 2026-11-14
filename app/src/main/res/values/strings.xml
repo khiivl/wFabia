@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">wFabia</string>
+    <string name="notif_channel">wFabia service</string>
+</resources>

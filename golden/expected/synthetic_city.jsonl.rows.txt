@@ -1,0 +1,27 @@
+  '          ' '  87 KM/H '   <- code - -  road: None
+  '    ←     ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Müllerstraße
+  '  ← 850M  ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Müllerstraße
+  '  ← 500M  ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Müllerstraße
+  '  ← 200M  ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Müllerstraße
+  '  ← 80M   ' '  87 KM/H '   <- code 7 TURN_NORMAL_LEFT  road: Müllerstraße
+  '    →     ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Äußere Ringstraße
+  '  → 700M  ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Äußere Ringstraße
+  '  → 350M  ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Äußere Ringstraße
+  ' →↓  B180 ' '  87 KM/H '   <- code 10 TURN_SHARP_RIGHT  road: B 180 Kalkstraße
+  ' →↓ 300M  ' '  87 KM/H '   <- code 10 TURN_SHARP_RIGHT  road: B 180 Kalkstraße
+  ' →↓ 100M  ' '  87 KM/H '   <- code 10 TURN_SHARP_RIGHT  road: B 180 Kalkstraße
+  '    U←    ' '  87 KM/H '   <- code 11 U_TURN_LEFT  road: Wendeweg
+  ' U← 150M  ' '  87 KM/H '   <- code 11 U_TURN_LEFT  road: Wendeweg
+  '  U← 60M  ' '  87 KM/H '   <- code 11 U_TURN_LEFT  road: Wendeweg
+  '    →U    ' '  87 KM/H '   <- code 12 U_TURN_RIGHT  road: Wendeweg 2
+  ' →U 150M  ' '  87 KM/H '   <- code 12 U_TURN_RIGHT  road: Wendeweg 2
+  '  →U 60M  ' '  87 KM/H '   <- code 12 U_TURN_RIGHT  road: Wendeweg 2
+ '    ←\\    ' '  87 KM/H '   <- code 5 TURN_SLIGHT_LEFT  road: Schräge Gasse
+ ' ←\\ 100M  ' '  87 KM/H '   <- code 5 TURN_SLIGHT_LEFT  road: Schräge Gasse
+ '  ←\\ 40M  ' '  87 KM/H '   <- code 5 TURN_SLIGHT_LEFT  road: Schräge Gasse
+ '  ←\\ 10M  ' '  87 KM/H '   <- code 5 TURN_SLIGHT_LEFT  road: Schräge Gasse
+  '    ✓←    ' '  87 KM/H '   <- code 41 DESTINATION_LEFT  road: Zielstrasse
+  '  ✓← 90M  ' '  87 KM/H '   <- code 41 DESTINATION_LEFT  road: Zielstrasse
+  '  ✓← 30M  ' '  87 KM/H '   <- code 41 DESTINATION_LEFT  road: Zielstrasse
+  '    ▶     ' '  87 KM/H '   <- code 1 DEPART  road: Anfang
+  '          ' '  87 KM/H '   <- code - -  road: None

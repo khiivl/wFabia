@@ -1,0 +1,446 @@
+<title>wFabia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: one dark head-unit-style stage (live module panel + Maxidot preview), then spec sections as a narrow reading column.
+   Tokens are placeholders for wDSP's colors.xml: swap the six group colors and the accent for the real values. */
+:root {
+  --bg: #0e1218;
+  --surface: #161c25;
+  --surface-2: #1d2530;
+  --line: #2a3441;
+  --fg: #e7ebf1;
+  --muted: #8d98a8;
+  --accent: #34c3b3;
+  --warn: #e8a43a;
+  --bad: #e5594f;
+  --g1: #d9534f; --g2: #9b59d0; --g3: #5c6bc0; --g4: #3f8fe0; --g5: #29b6f6; --g6: #26a69a;
+  --dot: #ff9a2e;
+  --dot-off: #3a2a18;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--display); margin: 0;
+  padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+h1 { font-size: 44px; line-height: 1.05; }
+h2 { font-size: 26px; margin-bottom: 14px; }
+h3 { font-size: 18px; margin-bottom: 6px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; }
+.lead { color: var(--muted); font-size: 19px; max-width: 62ch; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+header { display: flex; flex-direction: column; gap: 12px; }
+
+/* stage */
+.stage { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.panel-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.panel-h span { color: var(--muted); font-size: 14px; }
+.mods { display: flex; flex-direction: column; gap: 10px; }
+.mod { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; border-left: 5px solid var(--c); }
+.mod-top { display: flex; align-items: center; gap: 12px; }
+.mod-name { flex: 1; min-width: 0; }
+.mod-name b { font-weight: 600; font-size: 17px; display: block; }
+.mod-name small { color: var(--muted); font-size: 13px; }
+.chip { font: 500 11px var(--mono); padding: 3px 8px; border-radius: 99px; background: var(--surface); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.chip.ok { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.subs { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sub { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.sub[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.sub .sw { width: 28px; height: 16px; }
+/* switches */
+.sw { appearance: none; -webkit-appearance: none; width: 44px; height: 24px; border-radius: 99px; background: var(--line); position: relative; cursor: pointer; flex: none; transition: background .15s; margin: 0; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: calc(50% - 3px); aspect-ratio: 1; border-radius: 50%; background: var(--fg); transition: transform .15s; }
+.sw:checked { background: var(--accent); }
+.sw:checked::after { transform: translateX(calc(100% + 0px)); background: #06231f; }
+.sw:disabled { opacity: .4; cursor: not-allowed; }
+.sw:focus-visible, .sub:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* maxidot preview */
+.cluster { background: #090604; border: 1px solid #2b1d10; border-radius: 10px; padding: 18px 14px; display: flex; flex-direction: column; gap: 8px; }
+.row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.cell { aspect-ratio: 5 / 7; display: grid; place-items: center; font: 500 clamp(14px, 3.4vw, 26px)/1 var(--mono); color: var(--dot); background: #120c06; border-radius: 3px; text-shadow: 0 0 8px color-mix(in srgb, var(--dot) 60%, transparent); }
+.cell.e { color: transparent; text-shadow: none; }
+.cluster.off .cell { color: var(--dot-off); text-shadow: none; }
+.cap { margin-top: 12px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.cap b { color: var(--fg); font-weight: 600; }
+.scn { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.scn button { font: 500 12px var(--mono); background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+.scn button[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.scn button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* sections */
+section { display: flex; flex-direction: column; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.card p { font-size: 15px; color: var(--muted); margin: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 560px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0 0 12px; overflow-x: auto; font: 13px/1.6 var(--mono); color: var(--fg); }
+pre .c { color: var(--muted); }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; overflow-x: auto; }
+.diagram svg { min-width: 900px; width: 100%; height: auto; display: block; }
+.diagram text { font-family: var(--display); fill: var(--fg); font-size: 14px; }
+.diagram .s { fill: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+.diagram .b { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.2; }
+.diagram .dash { stroke-dasharray: 5 4; fill: none; }
+.diagram .big { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.diagram .ln { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.diagram .bus { stroke: var(--dot); stroke-width: 3; }
+.steps { counter-reset: s; display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.steps li::before { content: "M" counter(s); font: 600 13px var(--mono); color: var(--accent); padding-top: 3px; }
+.steps b { font-weight: 600; }
+.steps span { color: var(--muted); font-size: 15px; display: block; }
+.risk { border-left: 4px solid var(--warn); }
+.risk.bad { border-left-color: var(--bad); }
+ul.tight { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; gap: 6px; }
+ul.tight b { color: var(--fg); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .sw, .sw::after { transition: none; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Concept · Škoda Fabia Mk1 · QF K706 head unit</div>
+  <h1>wFabia</h1>
+  <p class="lead">One service on the head unit that listens to Zlink, drives the Maxidot through the CANable, and gives you a CAN sniffer and sender over adb. Every part has its own switch.</p>
+</header>
+
+<!-- STAGE -->
+<section>
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-h"><h2 style="margin:0">Modules</h2><span>the main screen, live toggles</span></div>
+      <div class="mods" id="mods"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-h"><h2 style="margin:0">Maxidot preview</h2><span>2 × 10 cells</span></div>
+      <div class="cluster" id="cluster" role="img" aria-label="Maxidot preview"><div class="row" id="r1"></div><div class="row" id="r2"></div></div>
+      <div class="scn" id="scn" role="group" aria-label="Sample situation"></div>
+      <div class="cap" id="cap"></div>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT IT DOES -->
+<section>
+  <h2>Four jobs, four switches</h2>
+  <div class="cols">
+    <div class="card" style="border-top:4px solid var(--g1)"><h3>Zlink tap</h3><p>Connects to <code>127.0.0.1:1555</code> on the head unit, decodes navigation and media frames with the same logic as <code>navdecode.py</code>, and keeps the current step, distance, lanes, road and track in one model.</p></div>
+    <div class="card" style="border-top:4px solid var(--g3)"><h3>Maxidot display</h3><p>Turns that model plus GPS speed into two 10-cell rows (the rules from <code>maxidot_sim.py</code>) and sends them with the FIS link: heartbeat, registration, session byte, about 4 updates a second at most.</p></div>
+    <div class="card" style="border-top:4px solid var(--g4)"><h3>CAN link</h3><p>Owns the CANable over USB (SLCAN, 100 kbit/s, termination off). Everything that touches the bus goes through it, so the display, the sniffer and later automations never fight over the adapter.</p></div>
+    <div class="card" style="border-top:4px solid var(--g6)"><h3>adb CAN bridge</h3><p>A local socket you reach with <code>adb forward</code>. Stream every frame to the PC, filter them, and send frames, with the CANable staying in the car.</p></div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section>
+  <h2>How the pieces connect</h2>
+  <div class="diagram">
+  <svg viewBox="0 0 1180 400" role="img" aria-label="Architecture: phone, Zlink, wFabia service with tap, model, renderer, FIS link, bridge, rules and CAN broker, CANable, comfort CAN, PC over adb">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+    <!-- phone + zlink -->
+    <rect class="b" x="20" y="20" width="170" height="48" rx="8"/><text x="105" y="49" text-anchor="middle">Phone, Android Auto</text>
+    <rect class="b" x="20" y="100" width="170" height="62" rx="8"/><text x="105" y="127" text-anchor="middle">Zlink 6.1.06</text><text class="s" x="105" y="146" text-anchor="middle">+ zlink_nav_meta</text>
+    <path class="ln" d="M105 68V100" marker-end="url(#ar)"/><text class="s" x="114" y="88">Wi-Fi</text>
+    <!-- PC -->
+    <rect class="b" x="20" y="200" width="170" height="62" rx="8"/><text x="105" y="227" text-anchor="middle">PC</text><text class="s" x="105" y="246" text-anchor="middle">wfabia.py, navlive</text>
+    <!-- service -->
+    <rect class="big" x="230" y="60" width="550" height="300" rx="14"/>
+    <text x="250" y="84" style="font-weight:600;font-size:16px">wFabia service (foreground)</text>
+    <!-- chain row -->
+    <rect class="b" x="250" y="100" width="120" height="62" rx="8" style="stroke:var(--g1)"/><text x="310" y="127" text-anchor="middle">Zlink tap</text><text class="s" x="310" y="146" text-anchor="middle">frames, decode</text>
+    <rect class="b" x="395" y="100" width="120" height="62" rx="8"/><text x="455" y="127" text-anchor="middle">Nav + media</text><text class="s" x="455" y="146" text-anchor="middle">model</text>
+    <rect class="b" x="540" y="100" width="110" height="62" rx="8" style="stroke:var(--g3)"/><text x="595" y="127" text-anchor="middle">Renderer</text><text class="s" x="595" y="146" text-anchor="middle">2×10 rows</text>
+    <rect class="b" x="670" y="100" width="95" height="62" rx="8"/><text x="717" y="127" text-anchor="middle">Speed</text><text class="s" x="717" y="146" text-anchor="middle">GPS / MCU</text>
+    <path class="ln" d="M190 131H250" marker-end="url(#ar)"/><text class="s" x="196" y="122">:1555</text>
+    <path class="ln" d="M370 131H395" marker-end="url(#ar)"/><path class="ln" d="M515 131H540" marker-end="url(#ar)"/><path class="ln" d="M670 131H650" marker-end="url(#ar)"/>
+    <!-- client row -->
+    <rect class="b" x="250" y="200" width="120" height="56" rx="8" style="stroke:var(--g6)"/><text x="310" y="226" text-anchor="middle">Bridge</text><text class="s" x="310" y="243" text-anchor="middle">tcp :7788</text>
+    <rect class="b dash" x="395" y="200" width="120" height="56" rx="8"/><text x="455" y="226" text-anchor="middle">Rules</text><text class="s" x="455" y="243" text-anchor="middle">later: windows</text>
+    <rect class="b" x="540" y="200" width="110" height="56" rx="8" style="stroke:var(--g3)"/><text x="595" y="226" text-anchor="middle">FIS link</text><text class="s" x="595" y="243" text-anchor="middle">heartbeat, session</text>
+    <path class="ln" d="M595 162V200" marker-end="url(#ar)"/>
+    <path class="ln" d="M190 231H250" marker-end="url(#ar)" marker-start="url(#ar)"/><text class="s" x="192" y="222">adb</text>
+    <!-- broker -->
+    <rect class="b" x="250" y="290" width="515" height="52" rx="8" style="stroke:var(--g4)"/><text x="507" y="313" text-anchor="middle">CAN broker</text><text class="s" x="507" y="331" text-anchor="middle">one owner of the adapter · rx fan-out · prioritised tx queue</text>
+    <path class="ln" d="M310 256V290" marker-end="url(#ar)" marker-start="url(#ar)"/><path class="ln" d="M455 256V290" marker-end="url(#ar)" marker-start="url(#ar)"/><path class="ln" d="M595 256V290" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <!-- right side -->
+    <rect class="b" x="830" y="288" width="120" height="56" rx="8"/><text x="890" y="313" text-anchor="middle">CANable</text><text class="s" x="890" y="331" text-anchor="middle">USB, SLCAN</text>
+    <path class="ln" d="M765 316H830" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path class="ln" d="M950 316H990" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <line class="bus" x1="990" y1="190" x2="990" y2="340"/>
+    <text class="s" x="1000" y="372">comfort CAN, 100 kbit/s</text>
+    <rect class="b" x="1030" y="160" width="130" height="56" rx="8"/><text x="1095" y="184" text-anchor="middle">Maxidot</text><text class="s" x="1095" y="202" text-anchor="middle">cluster</text>
+    <rect class="b dash" x="1030" y="240" width="130" height="56" rx="8"/><text x="1095" y="264" text-anchor="middle">Door / window</text><text class="s" x="1095" y="282" text-anchor="middle">modules</text>
+    <path class="ln" d="M990 188H1030" marker-end="url(#ar)"/><path class="ln" d="M990 268H1030" marker-end="url(#ar)"/>
+  </svg>
+  </div>
+  <p style="margin-top:12px;color:var(--muted);font-size:15px">Because the CANable sits on the comfort bus, it sees the whole bus in the car (ignition state, door and lock status, whatever the other modules say), not only the cluster. That is what makes the sniffer and later automations possible.</p>
+</section>
+
+<!-- BROKER -->
+<section>
+  <h2>The CAN broker is the heart of it</h2>
+  <p>The Maxidot link has strict timing (about 250 ms per message, acks on every fourth packet, heartbeat every 230 ms). A sniffer or a sender that talks to the adapter on its own would break that. So the adapter has exactly one owner.</p>
+  <div class="cols">
+    <div class="card"><h3>Receive</h3><p>One reader thread parses SLCAN lines and hands each frame to all subscribers. The FIS link only wants <code>0x2E8</code>, <code>0x699</code> and <code>0x40C</code>. The bridge gets whatever filter the PC asked for. A ring buffer keeps the last few thousand frames for late joiners.</p></div>
+    <div class="card"><h3>Transmit</h3><p>One writer thread, three priorities: heartbeat first, FIS packets second, everything else third. User frames go out between FIS messages, never inside one. If the queue grows, user frames are dropped and the drop is reported, never the heartbeat.</p></div>
+    <div class="card"><h3>Failure</h3><p>Adapter unplugged or bus-off: the display stops, the module shows "no link", and the service re-opens the adapter every 3 s and re-registers with the cluster (new session byte) on its own.</p></div>
+  </div>
+</section>
+
+<!-- BRIDGE -->
+<section>
+  <h2>CAN over adb, with the CANable in the car</h2>
+  <p>Yes, this works. The adapter stays plugged into the head unit and the PC only needs adb, over USB or wirelessly (<code>adb tcpip 5555</code>), so you can work on the car from the garage or the driveway.</p>
+  <pre><span class="c"># on the PC</span>
+adb forward tcp:7788 tcp:7788
+python wfabia.py candump --filter 0x2E8,0x699     <span class="c"># live frames, candump style</span>
+python wfabia.py cansend 0x4D9#08C0B9             <span class="c"># refused unless Send is switched on in the app</span>
+python wfabia.py zlink                            <span class="c"># raw Zlink frames; navlive.py attaches here</span>
+python wfabia.py log drive.jsonl                  <span class="c"># CAN + Zlink in one timestamped file</span></pre>
+  <p>The wire format is one JSON object per line over the socket, so the PC tool is about 100 lines and anything else can talk to it:</p>
+  <pre>→ {"op":"sub","ch":["can","zlink"],"can_ids":["0x2E8","0x699"]}
+← {"ch":"can","t":1761731034.512,"dir":"rx","id":"0x40C","d":"19000000"}
+← {"ch":"zlink","t":1761731034.600,"type":"0x8006","raw":"0a1f…"}
+→ {"op":"tx","id":"0x5A0","d":"01FF","ttl_ms":500}
+← {"ch":"ctl","ev":"tx_refused","why":"send_disabled"}
+→ {"op":"module","name":"fis","enabled":false}</pre>
+  <p>The one-client limit on port 1555 stops being a problem here: wFabia is the only client and relays the raw frames to the PC, so <code>navlive.py</code> and recording keep working while the display runs. For single frames without the socket there is also <code>adb shell am broadcast -a de.wfabia.CAN_TX --es id 0x5A0 --es data 01FF</code>, under the same Send switch.</p>
+  <div class="cols" style="margin-top:8px">
+    <div class="card risk"><h3>Sending is off by default</h3><p>Sniffing and sending are separate switches. Sending has to be armed in the app, can have an ID allowlist, and falls back to off when the service restarts.</p></div>
+    <div class="card"><h3>Rules instead of code</h3><p>Later features are rule files: when frames matching X arrive and condition Y holds, send Z once. "Windows up when parked" becomes a rule you can test from the PC first.</p></div>
+  </div>
+</section>
+
+<!-- WINDOWS -->
+<section>
+  <h2>Windows up when parked: what has to be true</h2>
+  <p>Nothing here is verified yet. These are the things to find out with the sniffer, in this order.</p>
+  <div class="cols">
+    <div class="card risk"><h3>The command frame</h3><p>Hold the key's lock button or the door switch while logging the bus and find what the convenience-close sends. If the comfort modules take it from a CAN frame, one frame may be enough. If the window motors are driven by hardwired lines from the door modules, CAN may not reach them at all.</p></div>
+    <div class="card risk"><h3>Parked detection</h3><p>Ignition, speed and door state should be readable from the same bus. Condition: ignition off, speed 0, all doors closed, and a one-shot trigger, never a loop.</p></div>
+    <div class="card risk bad"><h3>Power and bus sleep</h3><p>The head unit may power down with the ignition, and the comfort bus goes to sleep a few minutes after locking. The rule then needs the unit alive, the CANable powered, and possibly a wake frame. Check what the QF unit does at ignition off.</p></div>
+    <div class="card"><h3>Safety</h3><p>The door modules keep their own pinch protection, which is the reason to use the car's own close command and not to drive anything yourself. Add a confirmation or a short delay after locking so a window never moves while someone is reaching in.</p></div>
+  </div>
+</section>
+
+<!-- SETTINGS & STARTUP -->
+<section>
+  <h2>Switches, storage, startup</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Module</th><th>Switch</th><th>Options inside</th><th>Needs</th></tr></thead>
+    <tbody>
+      <tr><td>Zlink tap</td><td>on / off</td><td>port, record raw frames to a file</td><td>the Magisk forwarder</td></tr>
+      <tr><td>CAN link</td><td>on / off</td><td>port, bitrate, listen-only</td><td>USB host, permission</td></tr>
+      <tr><td>Maxidot display</td><td>on / off</td><td>navigation, lanes, exit names, media, GPS speed</td><td>CAN link; nav and media also need the Zlink tap</td></tr>
+      <tr><td>adb CAN bridge</td><td>on / off</td><td>sniff stream, allow send, ID allowlist</td><td>CAN link</td></tr>
+      <tr><td>Automations</td><td>per rule</td><td>rule files, test mode that only logs</td><td>CAN link, verified frames</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:12px">Switching a module off stops its threads and releases what it held: the Zlink tap closes the socket, the display lets the heartbeat stop so the cluster blanks, the CAN link closes the USB device. Settings live in one preferences file and change at runtime, with no restart. The service starts on boot and when the CANable is plugged in, as a foreground service with a one-line notification.</p>
+</section>
+
+<!-- LOOK -->
+<section>
+  <h2>Same family as wDSP and wRight</h2>
+  <ul class="tight">
+    <li><b>Shared tokens.</b> wFabia takes the dark theme, the accent logic and the card style from wDSP's <code>colors.xml</code> and <code>themes.xml</code>. Anything that ends up in two apps (switch style, module card, section header) moves into one small shared Android library, so a change lands in all three.</li>
+    <li><b>Colour as meaning.</b> wDSP runs red for bass to teal for treble. Here the same six colours mark the modules, from the Zlink input in red to the bridge in teal, so the order reads as the data flowing through.</li>
+    <li><b>One screen, no menus.</b> The main screen is the module list above, sized for the head unit's touch targets. Each module expands in place for its options. A second screen only exists for the live CAN log.</li>
+    <li><b>Same code shape as wDSP.</b> A <code>FabiaService</code> that owns the work, a thin activity that only shows state and flips switches. Java, Android Studio, no extra frameworks beyond <code>usb-serial-for-android</code> (MIT) for the CANable.</li>
+  </ul>
+</section>
+
+<!-- RISKS -->
+<section>
+  <h2>What could stop this</h2>
+  <div class="cols">
+    <div class="card risk bad"><h3>USB host on the K706</h3><p>The CANable needs a port that acts as a USB host and gives power. Plug it in and run <code>adb shell dumpsys usb</code>; if it shows <code>16d0:117e</code>, it works. If the ROM hides the port or grabs it, that is the first thing to fix.</p></div>
+    <div class="card risk"><h3>Permission prompt</h3><p>Android asks to allow USB access per device. With root, grant it once through an "always use this app" attach filter or install wFabia as a privileged app from the Magisk module.</p></div>
+    <div class="card risk"><h3>Port the Python</h3><p><code>navdecode</code>, <code>maxidot_sim</code> and the FIS link are about 1,500 lines of Python. A Java port is straightforward, and the replay files we recorded become the test set: same input, same two rows.</p></div>
+    <div class="card risk"><h3>Real radio on the bus</h3><p>The Maxidot link only works with the factory radio off the bus. The head unit has to be the only "radio", which is already the plan.</p></div>
+  </div>
+</section>
+
+<!-- PLAN -->
+<section>
+  <h2>Build order</h2>
+  <ol class="steps">
+    <li><div><b>Prove the hardware</b><span>CANable on the head unit, <code>dumpsys usb</code>, a bare app that opens it and logs frames. Ten minutes of drive-free work.</span></div></li>
+    <li><div><b>CAN link and broker</b><span>SLCAN reader and writer, the bridge socket, <code>wfabia.py candump</code> and <code>cansend</code>. This alone already gives you the sniffer.</span></div></li>
+    <li><div><b>FIS link in Java</b><span>Heartbeat, registration, <code>show_rows</code>. Check it against the bench cluster with fixed text.</span></div></li>
+    <li><div><b>Zlink tap and renderer</b><span>Port the decoder and formatter, replay the recorded drives and compare the rows with the Python output.</span></div></li>
+    <li><div><b>Module screen</b><span>The switches, status chips and the live preview, in the shared theme.</span></div></li>
+    <li><div><b>Rules and the first automation</b><span>Only after the sniffer has found the real frames.</span></div></li>
+  </ol>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var ROW = 10;
+  var st = { zlink: true, can: true, fis: true, nav: true, lanes: true, exit: true, media: true, speed: true, bridge: true, sniff: true, send: false, auto: false };
+  var scenario = 0;
+  var auto = true, timer = null;
+
+  function center(s) {
+    s = String(s).slice(0, ROW);
+    var l = Math.floor((ROW - s.length) / 2);
+    return (" ".repeat(l) + s + " ".repeat(ROW - s.length - l)).slice(0, ROW);
+  }
+  var blank = " ".repeat(ROW);
+  var speedTxt = center("  87 KM/H");
+  speedTxt = center("87 KM/H");
+
+  var SC = [
+    { id: "far", label: "Far from the turn", note: "More than 2 km to go: road number only, speed in row 2.",
+      f: function (s) { var r1 = s.nav ? center("↑ 12K  A9") : blank; return [r1, s.speed ? center("87 KM/H") : blank]; } },
+    { id: "exit", label: "Exit within 2 km", note: "The off-ramp name appears only inside 2 km, so it does not scroll all the time.",
+      f: function (s) { var r1 = s.nav ? center("→ 1.8K A9") : blank; return [r1, s.nav && s.exit ? center("LEIPZIG-W") : (s.speed ? center("87 KM/H") : blank)]; } },
+    { id: "lane", label: "Lane guidance", note: "Recommended lane in parentheses, lanes left to right. Only Google Maps sends lanes.",
+      f: function (s) { var r1 = s.nav ? center("/→ 450M A9") : blank; return [r1, s.nav && s.lanes ? center("← (↑) /→") : (s.speed ? center("87 KM/H") : blank)]; } },
+    { id: "round", label: "Roundabout", note: "O plus exit number, then the direction arrow.",
+      f: function (s) { var r1 = s.nav ? center("O2→ 150M") : blank; return [r1, s.speed ? center("87 KM/H") : blank]; } },
+    { id: "media", label: "Track change", note: "Artist and title replace navigation only while the next turn is more than 2 km away.",
+      f: function (s) { if (s.nav) return [blank, blank].map(function () { return null; }); return null; } }
+  ];
+  // media scenario handled separately because it overrides rather than adds
+  function compose() {
+    var s = st, sc = SC[scenario];
+    if (!s.can || !s.fis) return { rows: [blank, blank], off: true, why: !s.can ? "CAN link is off, so nothing reaches the cluster." : "Maxidot display is off. The heartbeat stops and the cluster blanks." };
+    var zl = s.zlink;
+    var navOn = s.nav && zl;
+    var vs = { nav: navOn, lanes: s.lanes && zl, exit: s.exit && zl, speed: s.speed };
+    if (sc.id === "media") {
+      if (s.media && zl) return { rows: [center("LA FEMME"), center("WAITING IN")], note: sc.note };
+      return { rows: [navOn ? center("↑ 12K  A9") : blank, s.speed ? center("87 KM/H") : blank], note: "Media is off or the Zlink tap is off, so the track change is ignored." };
+    }
+    var note = sc.note;
+    if (!zl && sc.id !== "far") note = "Zlink tap is off: no navigation data, so only speed is shown.";
+    return { rows: sc.f(vs), note: note };
+  }
+
+  function paint(rowEl, text) {
+    rowEl.textContent = "";
+    for (var i = 0; i < ROW; i++) {
+      var ch = text[i] || " ";
+      var d = document.createElement("div");
+      d.className = "cell" + (ch === " " ? " e" : "");
+      d.textContent = ch === " " ? "·" : ch;
+      rowEl.appendChild(d);
+    }
+  }
+  function render() {
+    var out = compose();
+    paint(document.getElementById("r1"), out.rows[0]);
+    paint(document.getElementById("r2"), out.rows[1]);
+    document.getElementById("cluster").classList.toggle("off", !!out.off);
+    var cap = document.getElementById("cap");
+    cap.textContent = "";
+    var b = document.createElement("b"); b.textContent = out.off ? "Cluster blank" : SC[scenario].label; cap.appendChild(b);
+    var t = document.createElement("span"); t.textContent = out.off ? out.why : out.note; cap.appendChild(t);
+    var sb = document.getElementById("scn").children;
+    for (var i = 0; i < sb.length; i++) sb[i].setAttribute("aria-pressed", String(i === scenario));
+    renderMods();
+  }
+
+  // module list
+  var MODS = [
+    { key: "zlink", c: "var(--g1)", name: "Zlink tap", sub: "Navigation and media from the phone", subs: [] },
+    { key: "fis", c: "var(--g3)", name: "Maxidot display", sub: "Two rows on the cluster",
+      subs: [["nav", "Navigation"], ["lanes", "Lanes"], ["exit", "Exit names"], ["media", "Media"], ["speed", "GPS speed"]] },
+    { key: "can", c: "var(--g4)", name: "CAN link", sub: "CANable, comfort bus, 100 kbit/s", subs: [] },
+    { key: "bridge", c: "var(--g6)", name: "adb CAN bridge", sub: "Sniff and send from the PC",
+      subs: [["sniff", "Sniff stream"], ["send", "Allow send"]] },
+    { key: "auto", c: "var(--g5)", name: "Automations", sub: "Windows up when parked", subs: [], planned: true }
+  ];
+  function status(m) {
+    if (m.planned) return ["planned", "warn"];
+    if (!st[m.key]) return ["off", ""];
+    if (m.key === "fis" && !st.can) return ["needs CAN link", "warn"];
+    if (m.key === "bridge" && !st.can) return ["needs CAN link", "warn"];
+    if (m.key === "zlink") return ["listening :1555", "ok"];
+    if (m.key === "can") return ["16d0:117e open", "ok"];
+    if (m.key === "fis") return ["~4 updates/s", "ok"];
+    if (m.key === "bridge") return [st.send ? "send armed" : "read only", st.send ? "warn" : "ok"];
+    return ["", ""];
+  }
+  function sw(id, checked, disabled, small) {
+    var i = document.createElement("input");
+    i.type = "checkbox"; i.className = "sw"; i.id = id; i.checked = checked; i.disabled = !!disabled;
+    i.setAttribute("role", "switch");
+    return i;
+  }
+  var built = false;
+  function renderMods() {
+    var host = document.getElementById("mods");
+    if (!built) {
+      MODS.forEach(function (m) {
+        var el = document.createElement("div"); el.className = "mod"; el.style.setProperty("--c", m.c); el.id = "mod-" + m.key;
+        var top = document.createElement("div"); top.className = "mod-top";
+        var nm = document.createElement("div"); nm.className = "mod-name";
+        var b = document.createElement("b"); b.textContent = m.name; var sm = document.createElement("small"); sm.textContent = m.sub;
+        nm.appendChild(b); nm.appendChild(sm);
+        var chip = document.createElement("span"); chip.className = "chip"; chip.id = "chip-" + m.key;
+        var main = sw("sw-" + m.key, st[m.key], m.planned);
+        main.setAttribute("aria-label", m.name);
+        main.addEventListener("change", function () { st[m.key] = main.checked; render(); });
+        top.appendChild(nm); top.appendChild(chip); top.appendChild(main);
+        el.appendChild(top);
+        if (m.subs.length) {
+          var subs = document.createElement("div"); subs.className = "subs";
+          m.subs.forEach(function (p) {
+            var lab = document.createElement("label"); lab.className = "sub"; lab.id = "sublab-" + p[0];
+            var s = sw("sw-" + p[0], st[p[0]], false); s.setAttribute("aria-label", m.name + ": " + p[1]);
+            s.addEventListener("change", function () { st[p[0]] = s.checked; render(); });
+            var t = document.createElement("span"); t.textContent = p[1];
+            lab.appendChild(s); lab.appendChild(t); subs.appendChild(lab);
+          });
+          el.appendChild(subs);
+        }
+        host.appendChild(el);
+      });
+      built = true;
+    }
+    MODS.forEach(function (m) {
+      var s = status(m), chip = document.getElementById("chip-" + m.key);
+      chip.textContent = s[0]; chip.className = "chip" + (s[1] ? " " + s[1] : "");
+      document.getElementById("sw-" + m.key).checked = st[m.key];
+      var parentOff = !st[m.key];
+      m.subs.forEach(function (p) {
+        var el = document.getElementById("sw-" + p[0]);
+        el.disabled = parentOff; el.checked = st[p[0]];
+        var needsZ = (p[0] === "nav" || p[0] === "lanes" || p[0] === "exit" || p[0] === "media") && !st.zlink;
+        var needsNav = (p[0] === "lanes" || p[0] === "exit") && !st.nav;
+        var dis = parentOff || needsZ || needsNav;
+        el.disabled = dis;
+        document.getElementById("sublab-" + p[0]).setAttribute("aria-disabled", String(dis));
+      });
+    });
+  }
+
+  // scenarios
+  var sbox = document.getElementById("scn");
+  SC.forEach(function (sc, i) {
+    var b = document.createElement("button"); b.type = "button"; b.textContent = sc.label;
+    b.addEventListener("click", function () { scenario = i; auto = false; render(); });
+    sbox.appendChild(b);
+  });
+  function tick() { if (auto) { scenario = (scenario + 1) % SC.length; render(); } }
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce) timer = setInterval(tick, 3500);
+  render();
+})();
+</script>

@@ -1,0 +1,16 @@
+  '          ' '  87 KM/H '   <- code - -  road: None
+  '   BAND   ' '  SHORT   '   <- code - -  road: None
+  '          ' '  87 KM/H '   <- code - -  road: None
+  'AN EQUALLY' 'A VERY LON'   <- code - -  road: None
+  ' BEYONCE  ' ' DEJA VU  '   <- code - -  road: None
+  'MÄDCHEN & ' ' STRASSE  '   <- code - -  road: None
+  'LOWERCASE ' 'LOWERCASE '   <- code - -  road: None
+  '          ' '  87 KM/H '   <- code - -  road: None
+  ' /→  A99  ' '  87 KM/H '   <- code 4 KEEP_RIGHT  road: [A 99] > Beispielstadt
+  ' /→ 9.0K  ' '  87 KM/H '   <- code 4 KEEP_RIGHT  road: [A 99] > Beispielstadt
+  ' /→ 8.5K  ' '  87 KM/H '   <- code 4 KEEP_RIGHT  road: [A 99] > Beispielstadt
+  'FAR AWAY A' 'FAR AWAY S'   <- code 4 KEEP_RIGHT  road: [A 99] > Beispielstadt
+  '    →     ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Naheweg
+  '  → 1.5K  ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Naheweg
+  '  → 900M  ' '  87 KM/H '   <- code 8 TURN_NORMAL_RIGHT  road: Naheweg
+  '          ' '  87 KM/H '   <- code - -  road: None

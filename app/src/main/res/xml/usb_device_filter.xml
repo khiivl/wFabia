@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CANable, SLCAN firmware: 16D0:117E -->
+    <usb-device vendor-id="5840" product-id="4478" />
+    <!-- the same adapter sitting in its STM32 DFU bootloader (0483:df11): the app starts it so it can send the leave request -->
+    <usb-device vendor-id="1155" product-id="57105" />
+</resources>

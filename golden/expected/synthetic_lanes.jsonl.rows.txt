@@ -1,0 +1,26 @@
+  '          ' '  87 KM/H '   <- code - -  road: None
+  '    →     ' '   (←)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 1  lanes: 2
+  '  → 400M  ' '   (←)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 1  lanes: 2
+  '  → 250M  ' '   (←)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 1  lanes: 2
+  '    →     ' '  ↑↑(/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 2  lanes: 3
+  '  → 400M  ' '  ↑↑(/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 2  lanes: 3
+  '  → 250M  ' '  ↑↑(/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 2  lanes: 3
+  '    →     ' '  (U)←↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 3  lanes: 3
+  '  → 400M  ' '  (U)←↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 3  lanes: 3
+  '  → 250M  ' '  (U)←↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 3  lanes: 3
+  '    →     ' '  (←↑)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 4  lanes: 2
+  '  → 400M  ' '  (←↑)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 4  lanes: 2
+  '  → 250M  ' '  (←↑)↑   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 4  lanes: 2
+  '    →     ' '  (\\↑/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 5  lanes: 1
+  '  → 400M  ' '  (\\↑/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 5  lanes: 1
+  '  → 250M  ' '  (\\↑/)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 5  lanes: 1
+  '    →     ' '  ←(↑↑)→  '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 6  lanes: 4
+  '  → 400M  ' '  ←(↑↑)→  '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 6  lanes: 4
+  '  → 250M  ' '  ←(↑↑)→  '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 6  lanes: 4
+  '    →     ' ' ←←↑(↑)→→ '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 7  lanes: 6
+  '  → 400M  ' ' ←←↑(↑)→→ '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 7  lanes: 6
+  '  → 250M  ' ' ←←↑(↑)→→ '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 7  lanes: 6
+  '    →     ' '   ?(↑)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 8  lanes: 2
+  '  → 400M  ' '   ?(↑)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 8  lanes: 2
+  '  → 250M  ' '   ?(↑)   '   <- code 8 TURN_NORMAL_RIGHT  road: Laneweg 8  lanes: 2
+  '          ' '  87 KM/H '   <- code - -  road: None
