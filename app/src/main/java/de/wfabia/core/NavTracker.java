@@ -30,6 +30,9 @@ public final class NavTracker {
                 ZlinkDecoder.StateMsg d = ZlinkDecoder.decodeState(payload);
                 step = d.step;
                 destination = d.destination;
+                // a source that never sends the explicit status (Open Headunit forwards what the phone sends, and the phone may
+                // skip it): a step with no status seen yet means navigation is running
+                if (active == null && d.step != null) active = true;
             } else if (typ == ZlinkDecoder.T_PROGRESS) {
                 ZlinkDecoder.ProgressMsg d = ZlinkDecoder.decodeProgress(payload);
                 next = d.next;

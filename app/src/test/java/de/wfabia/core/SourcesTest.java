@@ -80,6 +80,16 @@ public class SourcesTest {
         }
     }
 
+    @Test public void aStepWithoutAnExplicitStatusMeansNavigationIsActive() {
+        NavTracker t = new NavTracker();
+        assertTrue(t.feed(0x8006, new byte[]{0x0a, 0x04, 0x0a, 0x02, 0x08, 0x08}));   // a step: turn normal right
+        assertEquals(Boolean.TRUE, t.active);
+        assertTrue(t.feed(0x20, new byte[]{0x08, 0x02}));                              // an explicit "inactive" still wins
+        assertEquals(Boolean.FALSE, t.active);
+        assertTrue(t.feed(0x8006, new byte[]{0x0a, 0x04, 0x0a, 0x02, 0x08, 0x08}));
+        assertEquals(Boolean.FALSE, t.active);                                         // once a status was seen, only a status changes it
+    }
+
     @Test public void translateMapsTheMessagesTheDisplayUses() {
         byte[] p = {1, 2, 3};
         assertEquals(0x8006, OpenHuContract.translate("nav", 32774, p).type);
