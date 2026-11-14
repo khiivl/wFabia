@@ -11,6 +11,8 @@ import de.wfabia.core.BridgeServer;
 import de.wfabia.core.NavModel;
 import de.wfabia.core.OpenHuContract;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * The Open Headunit source: receives the raw Android Auto navigation and media messages that Open Headunit (a build with the
@@ -24,6 +26,7 @@ final class OpenHuSource {
     private volatile String sessionState = "unknown", transport = "";
     private volatile long frames, ignored, gaps, lastSeq = -1;
     private volatile long lastNanos;
+    private final Map<String, Long> perType = new TreeMap<>();   // "nav:32774" -> how many arrived (what the phone really sends)
 
     OpenHuSource(Context ctx, NavModel nav, BridgeServer bridge) {
         this.ctx = ctx.getApplicationContext();
@@ -43,6 +46,8 @@ final class OpenHuSource {
                 lastSeq = seq;
             }
             frames++;
+            String key = i.getStringExtra(OpenHuContract.EXTRA_CHANNEL) + ":" + i.getIntExtra(OpenHuContract.EXTRA_MSG, 0);
+            synchronized (perType) { Long n = perType.get(key); perType.put(key, n == null ? 1 : n + 1); }
             lastNanos = System.nanoTime();
             OpenHuContract.Frame f = OpenHuContract.translate(i.getStringExtra(OpenHuContract.EXTRA_CHANNEL),
                 i.getIntExtra(OpenHuContract.EXTRA_MSG, 0), i.getByteArrayExtra(OpenHuContract.EXTRA_PAYLOAD));
@@ -76,6 +81,7 @@ final class OpenHuSource {
         running = false;
         sessionState = "unknown";
         lastSeq = -1;
+        synchronized (perType) { perType.clear(); }
     }
 
     long frames() { return frames; }
@@ -107,6 +113,9 @@ final class OpenHuSource {
             sb.append(" (none yet: is wFabia on Open Headunit's forwarding list, and is it a build with the frame forwarder?)");
         } else {
             sb.append(String.format(Locale.US, ", last %.1f s ago, gaps %d", ms / 1000.0, gaps));
+        }
+        synchronized (perType) {
+            if (!perType.isEmpty()) sb.append("; types ").append(perType.toString().replace("=", "x"));
         }
         if (ignored > 0) sb.append("; ignored ").append(ignored).append(" frames of a newer contract version");
         return sb.toString();
