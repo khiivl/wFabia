@@ -47,7 +47,7 @@ Open Headunit has to be a build that forwards the frames and has wFabia on its w
 1. Plug the CANable in, then `adb shell dumpsys usb`. Android prints USB ids in decimal: look for `vendor_id=5840` (`16d0`) and `product_id=4478` (`117e`).
 2. Open wFabia. The CAN link card shows the adapter state and a frame counter. The first 300 frames go to logcat: `adb logcat -s wfabia:D`.
 3. If the adapter shows up as `0483:df11` ("DFU in FS Mode"), it is in the STM32 bootloader. wFabia leaves it by itself; the **Exit DFU mode** button does the same by hand.
-4. Cluster: the display card says "linked, session 0x…" and the cluster shows `MAXINAV` / `AKTIV` for a few seconds. After an ignition cycle it links again by itself.
+4. Cluster: the display card says "linked, session 0x…" and the cluster spells out `MAXINAV` / `AKTIV` letter by letter, then holds it for a moment. This welcome shows once per ignition. After an ignition cycle it links again by itself; when a warning (low fuel, for example) takes the display and drops the session, it links again within about a second, without the welcome.
 
 ## Using it
 

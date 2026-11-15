@@ -36,25 +36,98 @@ public class DisplayEndToEndTest {
         return dc;
     }
 
-    /** the cluster restarts (ignition off and on) and refuses the old session: the display must link again by itself */
-    @Test public void clusterRestartIsRelinked() throws Exception {
+    /**
+     * The cluster drops our session while the bus runs on (a warning such as low fuel takes the display) and refuses the
+     * old session: link again at once, without the heartbeat pause and without the welcome.
+     */
+    @Test public void droppedSessionIsRelinkedQuicklyWithoutTheWelcome() throws Exception {
         FakeCluster fc = new FakeCluster(0x2A);
         FakeWire wire = FakeWire.withCluster(fc);
         CanBroker broker = new CanBroker(() -> wire, null, 0, 50);
         AtomicReference<String> state = new AtomicReference<>("");
-        DisplayController dc = controller(fc, wire, state, broker);
+        List<String> history = Collections.synchronizedList(new ArrayList<>());
+        List<String> rowsSeen = Collections.synchronizedList(new ArrayList<>());
+        DisplayController dc = new DisplayController(broker, new NavModel(), MaxidotRenderer.Options::new, () -> 50.0,
+            r -> rowsSeen.add(r[0] + "|" + r[1]),
+            st -> { state.set(st); if (history.isEmpty() || !history.get(history.size() - 1).equals(st)) history.add(st); }, 0.1);
+        dc.setWelcomeSeconds(0.4);
         broker.start();
         dc.start();
         try {
             await(() -> state.get().startsWith("linked, session 0x2a"), "first link, last state: " + state.get(), 8000);
+            await(() -> rowsSeen.contains("          |  50 KM/H "), "the screen after the welcome", 3000);
+            rowsSeen.clear();
+            history.clear();
+            long dropped = System.currentTimeMillis();
             fc.restart(0x31);
-            await(() -> state.get().startsWith("linked, session 0x31"), "relink after the restart, last state: " + state.get(), 20000);
+            try {
+                await(() -> state.get().startsWith("linked, session 0x31"), "quick relink", 2000);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage() + "; state history: " + history, e);
+            }
+            long took = System.currentTimeMillis() - dropped;
             Thread.sleep(500);
             assertEquals(0x27, (int) fc.replies.get(fc.replies.size() - 1));   // rows are accepted again
+            assertTrue("relinked in " + took + " ms", took < 2000);
+            assertTrue("no heartbeat pause: " + history, history.stream().noneMatch(h -> h.contains("heartbeat off")));
+            assertTrue("no welcome after a quick relink: " + rowsSeen, rowsSeen.stream().noneMatch(r -> r.startsWith(" M")));
         } finally {
             dc.stop();
             broker.stop();
         }
+    }
+
+    /** the cluster keeps refusing the registration while the bus runs on: after the quick budget the heartbeat pause follows */
+    @Test public void quickRelinkFallsBackToTheHeartbeatPause() throws Exception {
+        FakeCluster fc = new FakeCluster(0x2A);
+        FakeWire wire = FakeWire.withCluster(fc);
+        CanBroker broker = new CanBroker(() -> wire, null, 0, 50);
+        AtomicReference<String> state = new AtomicReference<>("");
+        List<String> history = Collections.synchronizedList(new ArrayList<>());
+        DisplayController dc = new DisplayController(broker, new NavModel(), MaxidotRenderer.Options::new, () -> 50.0, r -> {},
+            st -> { state.set(st); if (history.isEmpty() || !history.get(history.size() - 1).equals(st)) history.add(st); }, 0.1);
+        dc.setWelcomeSeconds(0.1);
+        dc.setQuickRelinkSeconds(1.0);
+        broker.start();
+        dc.start();
+        try {
+            await(() -> state.get().startsWith("linked, session 0x2a"), "first link", 8000);
+            fc.restartStrict(0x44);   // refuses every registration until it has seen the heartbeat go away
+            try {
+                await(() -> state.get().startsWith("linked, session 0x44"), "link after the heartbeat pause", 15000);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage() + "; state history: " + history, e);
+            }
+            assertTrue("tried the quick way first: " + history, history.stream().anyMatch(h -> h.startsWith("linking again")));
+            assertTrue("then paused the heartbeat: " + history, history.stream().anyMatch(h -> h.contains("heartbeat off")));
+        } finally {
+            dc.stop();
+            broker.stop();
+        }
+    }
+
+    @Test public void theWelcomeAppearsLetterByLetter() {
+        double total = 4.0;
+        assertEquals(" M        |          ", String.join("|", DisplayController.welcomeRows(0.0, total)));
+        assertEquals(" MA       |          ", String.join("|", DisplayController.welcomeRows(0.2, total)));
+        assertEquals(" MAXINAV  |          ", String.join("|", DisplayController.welcomeRows(1.2, total)));
+        assertEquals(" MAXINAV  |  A       ", String.join("|", DisplayController.welcomeRows(1.4, total)));
+        assertEquals(" MAXINAV  |  AKTIV   ", String.join("|", DisplayController.welcomeRows(2.2, total)));
+        assertEquals(" MAXINAV  |  AKTIV   ", String.join("|", DisplayController.welcomeRows(3.9, total)));
+        // a short welcome still ends on the whole text
+        assertEquals(" MAXINAV  |  AKTIV   ", String.join("|", DisplayController.welcomeRows(0.5, 0.8)));
+        // every frame adds exactly one letter, in reading order
+        String last = "";
+        int letters = 0;
+        for (double t = 0; t < 2.5; t += 0.2) {
+            String now = String.join("", DisplayController.welcomeRows(t + 1e-9, total)).replace(" ", "");
+            if (!now.equals(last)) {
+                assertEquals(++letters, now.length());
+                assertTrue(now, ("MAXINAV" + "AKTIV").startsWith(now));
+                last = now;
+            }
+        }
+        assertEquals(12, letters);
     }
 
     /** the bus goes silent and speaks again (ignition cycle): relink right away, without waiting for rejected rows */
@@ -73,6 +146,7 @@ public class DisplayEndToEndTest {
         try {
             await(() -> state.get().startsWith("linked, session 0x2a"), "first link", 8000);
             wire.injectFrame(0x40C, new byte[]{0x19, 0, 0, 0});
+            fc.powerOff();
             Thread.sleep(2200);                                   // ignition off
             fc.restartStrict(0x55);                               // ignition on: the cluster still believes in the old radio
             wire.injectFrame(0x40C, new byte[]{0x00, 0, 0, 0});
@@ -98,6 +172,7 @@ public class DisplayEndToEndTest {
         try {
             await(() -> state.get().startsWith("linked, session 0x2a"), "first link", 8000);
             wire.injectFrame(0x40C, new byte[]{0x19, 0, 0, 0});
+            fc.powerOff();
             Thread.sleep(2200);                                   // ignition off: nothing on the bus
             fc.restart(0x40);                                     // ignition on: the cluster boots with a fresh session
             wire.injectFrame(0x40C, new byte[]{0x00, 0, 0, 0});   // and speaks again
@@ -122,15 +197,17 @@ public class DisplayEndToEndTest {
         MaxidotRenderer.Options opts = new MaxidotRenderer.Options();
         AtomicReference<String> state = new AtomicReference<>("");
         AtomicReference<String[]> rows = new AtomicReference<>();
+        List<String> firstRows = Collections.synchronizedList(new ArrayList<>());
         Double[] speed = {87.0};
-        DisplayController dc = new DisplayController(broker, nav, () -> opts, () -> speed[0], rows::set, state::set, 0.1);
+        DisplayController dc = new DisplayController(broker, nav, () -> opts, () -> speed[0],
+            r -> { rows.set(r); if (firstRows.isEmpty()) firstRows.add(r[0] + "|" + r[1]); }, state::set, 0.1);
         dc.setWelcomeSeconds(0.8);
         broker.start();
         dc.start();
         try {
             await(() -> state.get().startsWith("linked"), "linked, last state: " + state.get(), 8000);
             await(() -> rows.get() != null, "first rows", 2000);
-            assertEquals(" MAXINAV  |  AKTIV   ", rows.get()[0] + "|" + rows.get()[1]);   // welcome, centered
+            assertEquals(" M        |          ", firstRows.get(0));   // the welcome starts with its first letter, in its final cell
             await(() -> fc.messages.stream().anyMatch(m -> m.length == 37 && fc.rows(m).equals(" MAXINAV  |  AKTIV   ")), "welcome on the cluster", 3000);
             await(() -> "          |  87 KM/H ".equals(rows.get()[0] + "|" + rows.get()[1]), "idle screen after the welcome", 4000);   // speed on row 2
 

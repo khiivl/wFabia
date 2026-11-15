@@ -10,19 +10,37 @@ import java.util.logging.Logger;
 
 /**
  * Drives the cluster: registers a FisLink, then keeps the two rows current. Evaluates the renderer five times a second,
- * sends when the rows changed (so text scrolls at about 5 Hz and everything else only on change) and every few seconds
+ * sends when the rows changed (so text scrolls at about 5 Hz and everything else only on change) and every second
  * as a keepalive, which also notices a cluster that lost its session (ignition cycle). Re-registers after any error or
  * adapter loss. The heartbeat runs for as long as the controller runs: stopping the controller stops it, so the cluster blanks.
  * An unexpected exception in the loop is reported through the state callback and the loop carries on; it never kills the app.
+ *
+ * Two ways back after a lost session:
+ *  - quick: the cluster stops accepting rows while the bus runs on (a warning such as low fuel takes the display and drops our
+ *    session). The heartbeat never stopped, so the cluster still sees the radio: register again at once, no warm-up, no
+ *    welcome, and retry every few hundred milliseconds. Only when that has not held for {@link #QUICK_RELINK_S} does it fall
+ *    back to the slow way;
+ *  - slow: the bus went quiet and came back (ignition), or the quick way did not hold: switch the heartbeat off for
+ *    {@link #OFF_SECONDS} so the cluster sees the radio disappear, warm up, register.
+ * The welcome shows once per ignition (bus epoch), as a loading bar, not after a quick re-link or an adapter reconnect.
  */
 public final class DisplayController {
     private static final Logger LOG = Logger.getLogger("wfabia.display");
     private static final long TICK_MS = 200;
-    private static final double KEEPALIVE_S = 3.0;
+    /** rows are re-sent at least this often even when unchanged; a dropped session shows up within it */
+    private static final double KEEPALIVE_S = 1.0;
     /** how long the heartbeat stays off before a re-registration (the cluster drops its radio after about a second) */
     static final double OFF_SECONDS = 3.0;
-    /** shown for a few seconds after every successful link (the font has capitals only) */
+    /** a quick re-link episode may take this long before the slow way takes over */
+    static final double QUICK_RELINK_S = 10.0;
+    /** pause between quick registration attempts */
+    static final long QUICK_RETRY_MS = 300;
+    /** shown after the first link of an ignition (the font has capitals only) */
     static final String WELCOME_1 = "MAXINAV", WELCOME_2 = "AKTIV";
+    /** the welcome's letters appear one per step, then the whole text holds for the rest of the welcome */
+    static final double WELCOME_STEP_S = 0.2;
+    /** at most this share of the welcome is spent on the letters appearing */
+    static final double WELCOME_REVEAL_SHARE = 0.6;
 
     public interface SpeedSource {
         /** km/h, or null when unknown. Must be fast and never block. */
@@ -38,6 +56,7 @@ public final class DisplayController {
     private final double warmup;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
+    private volatile double quickRelinkSeconds = QUICK_RELINK_S;
     private Thread thread;
 
     // loop state
@@ -45,9 +64,12 @@ public final class DisplayController {
     private long registeredGen = -1;
     private boolean failedBefore;
     private String[] shown;
-    private int fails;
     private long lastSend;
     private long welcomeUntil;
+    private long welcomeStart;
+    private long welcomedEpoch = -1;   // the bus epoch (ignition) the welcome was last shown in
+    private long quickUntil;           // a quick re-link episode runs until then; 0 = none
+    private boolean flagQuickTried;    // a quick re-link for "the cluster sees no radio" was tried since the flag was last seen set
     private long seenEpoch;
     private long registeredAt;
     private long flagZeroSince;
@@ -86,7 +108,44 @@ public final class DisplayController {
 
     public void setWelcomeSeconds(double s) { welcomeSeconds = s; }
 
+    /** how long the quick way may try before the heartbeat pause (tests shorten it) */
+    void setQuickRelinkSeconds(double s) { quickRelinkSeconds = s; }
+
     String[] compute() { return render(nav, options.get(), speed); }
+
+    /**
+     * The welcome as a little loading bar: the letters of both rows appear one by one in the cells they end up in (MAXINAV,
+     * then AKTIV), then the whole text holds for the rest of the welcome.
+     * @param elapsed seconds since the link
+     * @param total   seconds the welcome lasts
+     */
+    static String[] welcomeRows(double elapsed, double total) {
+        String top = MaxidotRenderer.center(WELCOME_1, MaxidotRenderer.ROW), bottom = MaxidotRenderer.center(WELCOME_2, MaxidotRenderer.ROW);
+        int letters = WELCOME_1.length() + WELCOME_2.length();
+        double reveal = Math.min(WELCOME_STEP_S * letters, WELCOME_REVEAL_SHARE * total);
+        int shown = reveal <= 0 ? letters : Math.min(letters, 1 + (int) Math.floor(Math.max(0, elapsed) * letters / reveal + 1e-9));
+        return new String[]{firstLetters(top, shown), firstLetters(bottom, shown - WELCOME_1.length())};
+    }
+
+    /** the row with only its first n letters, the others blanked in place */
+    private static String firstLetters(String row, int n) {
+        StringBuilder b = new StringBuilder(row.length());
+        int seen = 0;
+        for (int i = 0; i < row.length(); i++) {
+            char ch = row.charAt(i);
+            if (ch != ' ' && seen++ < n) b.append(ch);
+            else b.append(' ');
+        }
+        return b.toString();
+    }
+
+    /** the cluster dropped our session while the bus runs on: link again without the heartbeat pause */
+    private void relinkQuickly(String why) {
+        state.accept(why);
+        registeredGen = -1;
+        failedBefore = true;
+        if (quickUntil == 0) quickUntil = System.nanoTime() + (long) (quickRelinkSeconds * 1e9);
+    }
 
     /** the two rows the cluster shows for the current state (without the welcome); also the preview while no cluster is linked */
     public static String[] render(NavModel nav, MaxidotRenderer.Options o, SpeedSource speed) {
@@ -102,8 +161,10 @@ public final class DisplayController {
         registeredGen = -1;
         failedBefore = false;
         shown = null;
-        fails = 0;
         lastSend = 0;
+        welcomedEpoch = -1;   // switching the display on is a start: welcome again
+        quickUntil = 0;
+        flagQuickTried = false;
         while (!stopped) {
             try {
                 if (!iteration()) break;
@@ -138,31 +199,55 @@ public final class DisplayController {
         }
         long gen = broker.generation();
         if (registeredGen != gen) {
+            boolean quick = quickUntil != 0 && !powerCycleNext;
+            if (quick && (System.nanoTime() > quickUntil || broker.busEpoch() != seenEpoch)) {
+                // the quick way did not hold, or the bus went quiet and came back meanwhile (ignition): let the cluster see the
+                // radio disappear, as after an ignition cycle
+                quick = false;
+                quickUntil = 0;
+                powerCycleNext = true;
+            }
             if (powerCycleNext) {
                 // like a real radio that switches off with the ignition: without that the cluster may keep treating us as the old, registered radio
                 state.accept("cluster restart: switching the radio heartbeat off for " + OFF_SECONDS + " s");
                 powerCycleNext = false;
+                quickUntil = 0;
                 l.stopHeartbeat();
                 if (!sleep((long) (OFF_SECONDS * 1000))) return false;
                 l.startHeartbeat();
             }
-            state.accept("registering with the cluster");
-            if (!sleep((long) (warmup * 1000))) return false;    // let the cluster see the heartbeat first
+            if (quick) {
+                state.accept("linking again (the radio heartbeat kept running)");
+            } else {
+                state.accept("registering with the cluster");
+                if (!sleep((long) (warmup * 1000))) return false;    // let the cluster see the heartbeat first
+            }
             if (!broker.isUp() || broker.generation() != gen) return true;
             try {
                 l.register(failedBefore);
+                long now = System.nanoTime();
+                long epoch = broker.busEpoch();
                 registeredGen = gen;
                 failedBefore = false;
                 shown = null;
-                fails = 0;
-                welcomeUntil = System.nanoTime() + (long) (welcomeSeconds * 1e9);
+                if (epoch != welcomedEpoch) {   // the first link of this ignition (or since the display was switched on)
+                    welcomedEpoch = epoch;
+                    welcomeStart = now;
+                    welcomeUntil = now + (long) (welcomeSeconds * 1e9);
+                } else {
+                    welcomeUntil = 0;
+                }
                 registerFailures = 0;
-                seenEpoch = broker.busEpoch();
-                registeredAt = System.nanoTime();
+                seenEpoch = epoch;
+                registeredAt = now;
                 flagZeroSince = 0;
-                state.accept("linked, session 0x" + Integer.toHexString(l.session()));
+                state.accept("linked, session 0x" + Integer.toHexString(l.session()) + (quick ? " (quick re-link)" : ""));
             } catch (IOException e) {
                 failedBefore = true;
+                if (quick) {
+                    state.accept("linking again: " + e.getMessage() + " (retrying)");
+                    return sleep(QUICK_RETRY_MS);
+                }
                 if (++registerFailures >= 2) powerCycleNext = true;   // refused twice: let the cluster see the radio disappear
                 LOG.info("registration failed: " + e.getMessage());
                 long ago = broker.millisSinceRx();
@@ -184,33 +269,37 @@ public final class DisplayController {
         }
         int flag = broker.radioFlag();
         long nowNs = System.nanoTime();
+        if (flag > 0) flagQuickTried = false;
         if (flag == 0 && broker.radioFlagAgeMs() < 1500 && (nowNs - registeredAt) / 1e9 > 5.0) {
             if (flagZeroSince == 0) flagZeroSince = nowNs;
             if ((nowNs - flagZeroSince) / 1e9 > 2.0) {
-                state.accept("the cluster says it sees no radio: linking again");
-                registeredGen = -1;
-                failedBefore = true;
-                powerCycleNext = true;
+                if (!flagQuickTried) {
+                    // try the quick way once; if the cluster still sees no radio after it, the heartbeat pause follows
+                    flagQuickTried = true;
+                    relinkQuickly("the cluster says it sees no radio: linking again");
+                } else {
+                    state.accept("the cluster still sees no radio: linking again");
+                    registeredGen = -1;
+                    failedBefore = true;
+                    powerCycleNext = true;
+                }
                 return true;
             }
         } else {
             flagZeroSince = 0;
         }
-        String[] rows = System.nanoTime() < welcomeUntil
-            ? new String[]{MaxidotRenderer.center(WELCOME_1, MaxidotRenderer.ROW), MaxidotRenderer.center(WELCOME_2, MaxidotRenderer.ROW)}
-            : compute();
+        String[] rows = nowNs < welcomeUntil ? welcomeRows((nowNs - welcomeStart) / 1e9, welcomeSeconds) : compute();
         preview.accept(rows);
         boolean due = shown == null || !Arrays.equals(rows, shown) || (System.nanoTime() - lastSend) / 1e9 > KEEPALIVE_S;
         if (due) {
             if (l.showRows(rows[0], rows[1])) {
                 shown = rows;
-                fails = 0;
                 lastSend = System.nanoTime();
-            } else if (++fails >= 2) {
-                state.accept("cluster stopped accepting rows, re-registering");
-                registeredGen = -1;
-                failedBefore = true;
-                powerCycleNext = true;
+                quickUntil = 0;   // the cluster takes rows again: any quick re-link episode is over
+            } else {
+                // showRows already tried twice, reconnecting in between: the cluster dropped our session (a warning took the
+                // display, for example). The heartbeat still runs, so register again right away.
+                relinkQuickly("the cluster stopped accepting rows: linking again");
                 return true;
             }
         }

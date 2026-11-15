@@ -27,7 +27,13 @@ public class FakeCluster extends FrameBuffer implements CanAdapter {
     synchronized void restart(int newSession) {
         session = newSession;
         buf = new ByteArrayOutputStream();
+        poweredOff = false;
     }
+
+    private volatile boolean poweredOff;
+
+    /** ignition off: the cluster answers nothing (and sends nothing) until restart() */
+    void powerOff() { poweredOff = true; }
 
     private volatile boolean strict, gapSeen;
     private volatile long lastHeartbeat;
@@ -52,6 +58,7 @@ public class FakeCluster extends FrameBuffer implements CanAdapter {
             if (strict && now - lastHeartbeat > 1_500_000_000L) gapSeen = true;
             lastHeartbeat = now;
         }
+        if (poweredOff) return;
         if (canId == ID_SETUP_REQUEST && data.length >= 2 && (data[1] & 0xFF) == 0xC0) {
             setups++;
             buf = new ByteArrayOutputStream();
