@@ -46,8 +46,70 @@ def font_ok(ch):
     return ch in FONT_EXTRA or 0x20 <= ord(ch) <= 0x5E
 
 
+# ---- Cyrillic -> Latin capitals (the font has no Cyrillic cells) ------------------------------------------
+# Ukrainian: the national standard (Cabinet of Ministers resolution 55 of 2010): Київ KYIV, Згурівка ZGHURIVKA, Ялта YALTA,
+# Україна UKRAINA (є ї й ю я are YE YI Y YU YA at the start of a word, IE I I IU IA inside it; apostrophe and ь not written).
+# Russian: the common readable scheme: Щукин SHCHUKIN, Королёв KOROLYOV, Горбачёв GORBACHOV, Толстой TOLSTOY, Мышь MYSH.
+# і ї є ґ are only Ukrainian, ы э ё ъ only Russian; the more frequent kind wins, a text with neither is read as Ukrainian.
+_UK_ONLY, _RU_ONLY, _APOSTROPHES = "іїєґ", "ыэёъ", "'’ʼ`"
+_UK = dict(а="A", б="B", в="V", г="H", ґ="G", д="D", е="E", є=("YE", "IE"), ж="ZH", з="Z", и="Y", і="I", ї=("YI", "I"),
+           й=("Y", "I"), к="K", л="L", м="M", н="N", о="O", п="P", р="R", с="S", т="T", у="U", ф="F", х="KH", ц="TS",
+           ч="CH", ш="SH", щ="SHCH", ь="", ю=("YU", "IU"), я=("YA", "IA"), ы="Y", э="E", ё="YO", ъ="")
+_RU = dict(а="A", б="B", в="V", г="G", д="D", е="E", ё="YO", ж="ZH", з="Z", и="I", й="Y", к="K", л="L", м="M", н="N",
+           о="O", п="P", р="R", с="S", т="T", у="U", ф="F", х="KH", ц="TS", ч="CH", ш="SH", щ="SHCH", ъ="", ы="Y", ь="",
+           э="E", ю="YU", я="YA", і="I", ї="YI", є="YE", ґ="G")
+
+
+def _is_cyr(ch):
+    return 0x0400 <= ord(ch) <= 0x04FF
+
+
+def cyr_lang(text):
+    uk = sum(1 for c in text.lower() if c in _UK_ONLY)
+    ru = sum(1 for c in text.lower() if c in _RU_ONLY)
+    return "ru" if ru > uk else "uk"
+
+
+def _cyr_letter(c, prev, initial, lang):
+    if lang == "ru":
+        if c == "ё" and prev and prev in "жчшщц":
+            return "O"
+        return _RU.get(c)
+    if c == "г" and prev == "з":
+        return "GH"
+    v = _UK.get(c)
+    return v[0 if initial else 1] if isinstance(v, tuple) else v
+
+
+def cyr_latin(text):
+    """Cyrillic letters -> Latin capitals (Ukrainian or Russian, see above); anything else unchanged"""
+    if not any(_is_cyr(ch) for ch in text):
+        return text
+    lang = cyr_lang(text)
+    out, in_word, prev = [], False, ""
+    for i, ch in enumerate(text):
+        if ch in _APOSTROPHES and prev and i + 1 < len(text) and _is_cyr(text[i + 1]):
+            continue                      # м'ясо, п’ять: the apostrophe inside a word is not written
+        if not _is_cyr(ch):
+            out.append(ch)
+            in_word, prev = ch.isalpha(), ""
+            continue
+        c = ch.lower()
+        lat = _cyr_letter(c, prev, not in_word, lang)
+        if lat is None:                   # another Cyrillic alphabet: its base letter if it has one (ў -> у), else unchanged
+            base = "".join(x for x in unicodedata.normalize("NFKD", c) if not unicodedata.combining(x))
+            if len(base) == 1 and base != c and _is_cyr(base):
+                lat = _cyr_letter(base, prev, not in_word, lang)
+            if lat is None:
+                lat = ch
+        out.append(lat)
+        in_word, prev = True, c
+    return "".join(out)
+
+
 def to_font(text):
-    """str -> str that the display can show (upper case, ß->SS, accents stripped, missing -> '?')"""
+    """str -> str that the display can show (upper case, Cyrillic transliterated, ß->SS, accents stripped, missing -> '?')"""
+    text = cyr_latin(text)
     out = []
     for ch in text:
         if ch == "ß":

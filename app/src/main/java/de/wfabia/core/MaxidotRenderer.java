@@ -34,8 +34,9 @@ public final class MaxidotRenderer {
         return FONT_EXTRA.indexOf(ch) >= 0 || (ch >= 0x20 && ch <= 0x5E);
     }
 
-    /** str -> str that the display can show (upper case, sharp s -> SS, accents stripped, missing -> '?') */
+    /** str -> str that the display can show (upper case, Cyrillic transliterated, sharp s -> SS, accents stripped, missing -> '?') */
     public static String toFont(String text) {
+        text = Cyrillic.toLatin(text);
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < text.length(); i++) {
             char ch = text.charAt(i);

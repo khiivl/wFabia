@@ -73,7 +73,7 @@ Facts that took real captures to learn (all encoded in `navdecode.py`, listed he
 
 ## 5. Display rules (implemented in `maxidot_sim.py::screen()`; port exactly)
 
-Font: 10 cells per row, no lowercase, no diagonal arrows. `to_font()` uppercases, maps Ä Ö Ü, ß->SS, strips accents, unknown -> `?`.
+Font: 10 cells per row, no lowercase, no diagonal arrows. `to_font()` transliterates Cyrillic (Ukrainian by the national standard, Київ -> KYIV; Russian by the common scheme, Королёв -> KOROLYOV; і ї є ґ vs ы э ё ъ pick the language, Ukrainian when neither appears), uppercases, maps Ä Ö Ü, ß->SS, strips accents, unknown -> `?`.
 
 - Row 1: centered block of `glyph + distance` and the **road number only** (A9, B180; never street names). Gap 2 spaces if it fits, else 1, else drop the number.
 - Row 2: lanes if present (recommended lane in parentheses, lanes left to right, centered); else the motorway exit/junction name **only when within 2000 m**; else GPS speed.
