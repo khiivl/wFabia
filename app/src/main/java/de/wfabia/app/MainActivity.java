@@ -57,6 +57,14 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         }
     };
 
+    /** the cells follow the display's own rate (text scrolls at about 5 Hz), the cards the slower poll */
+    private final Runnable previewPoll = new Runnable() {
+        @Override public void run() {
+            refreshPreview();
+            main.postDelayed(this, 200);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -70,10 +78,12 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         super.onStart();
         mods.addListener(this);
         main.post(poll);
+        main.post(previewPoll);
     }
 
     @Override protected void onStop() {
         main.removeCallbacks(poll);
+        main.removeCallbacks(previewPoll);
         super.onStop();
     }
 
@@ -348,16 +358,7 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
                     s.setEnabled(parentOn && mods.blockedBy(k) == null);
                 }
             }
-            String[] rows = hub.rows;
-            boolean off = !mods.effective(Modules.DISPLAY);
-            for (int r = 0; r < 2; r++) {
-                for (int c = 0; c < 10; c++) {
-                    char ch = rows[r].length() > c ? rows[r].charAt(c) : ' ';
-                    cells[r][c].setText(ch == ' ' ? "" : String.valueOf(ch));
-                    cells[r][c].setTextColor(color(off ? R.color.dot_off : R.color.dot));
-                }
-            }
-            previewNote.setText(off ? "The display module is off, so the cluster is blank." : hub.displayState);
+            refreshPreview();
             boolean needLocation = mods.effective(Modules.SPEED)
                 && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED);
@@ -365,5 +366,22 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         } finally {
             refreshing = false;
         }
+    }
+
+    /** the 2x10 cells: what the cluster shows, or, with no cluster linked, what it would show */
+    private void refreshPreview() {
+        String[] rows = hub.rows;
+        for (int r = 0; r < 2; r++) {
+            for (int c = 0; c < 10; c++) {
+                char ch = rows[r].length() > c ? rows[r].charAt(c) : ' ';
+                cells[r][c].setText(ch == ' ' ? "" : String.valueOf(ch));
+            }
+        }
+        String note;
+        if (hub.displayLinked) note = hub.displayState;
+        else if (!mods.wanted(Modules.DISPLAY)) note = "Preview only: the display module is off, so the cluster stays blank.";
+        else if (mods.blockedBy(Modules.DISPLAY) != null) note = "Preview only: the display module needs " + mods.blockedBy(Modules.DISPLAY) + ", so the cluster stays blank.";
+        else note = "Preview only, no cluster linked: " + hub.displayState;
+        if (!note.equals(previewNote.getText().toString())) previewNote.setText(note);
     }
 }

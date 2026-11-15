@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package de.wfabia.core;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -45,6 +46,41 @@ public class BridgeAndModulesTest {
         assertFalse(m.options().lanes);
         assertFalse(m.options().exit);
         assertTrue(m.options().speed);
+    }
+
+    @Test public void previewShowsWhatTheClusterWouldShowWithoutTheCanLink() {
+        Modules m = new Modules(new MemStore());
+        m.set(Modules.CAN, false);                                   // a phone: no CANable
+        assertFalse(m.effective(Modules.DISPLAY));
+        assertFalse("the cluster gets nothing", m.options().nav);
+        MaxidotRenderer.Options p = m.previewOptions();
+        assertTrue(p.nav && p.lanes && p.exit && p.media && p.speed);
+        m.set(Modules.DISPLAY, false);
+        assertTrue(m.previewOptions().nav);
+        m.set(Modules.LANES, false);
+        assertFalse("the display's own switches still count", m.previewOptions().lanes);
+        assertTrue(m.previewOptions().exit);
+        m.set(Modules.ZLINK, false);                                 // and a source is still needed
+        assertFalse(m.previewOptions().nav);
+        assertFalse(m.previewOptions().exit);
+        assertFalse(m.previewOptions().media);
+        m.set(Modules.OHU, true);
+        assertTrue(m.previewOptions().nav);
+    }
+
+    @Test public void previewRendersAStepWithNoClusterLinked() {
+        Modules m = new Modules(new MemStore());
+        m.set(Modules.CAN, false);
+        NavModel nav = new NavModel();
+        String blank = "          ";
+        String[] before = DisplayController.render(nav, m.previewOptions(), () -> null);
+        assertEquals(blank, before[0]);
+        assertTrue(nav.feed(0x8006, new byte[]{0x0a, 0x04, 0x0a, 0x02, 0x08, 0x08}));   // a step: turn normal right
+        String[] rows = DisplayController.render(nav, m.previewOptions(), () -> null);
+        assertTrue("the turn arrow shows: " + rows[0] + "|" + rows[1], (rows[0] + rows[1]).contains("→"));
+        // the same rows the cluster would get once it is linked
+        m.set(Modules.CAN, true);
+        assertArrayEquals(DisplayController.render(nav, m.options(), () -> null), rows);
     }
 
     @Test public void sendNeverRestoredAndAllowlistParsed() {

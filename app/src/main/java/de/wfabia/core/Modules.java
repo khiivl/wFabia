@@ -93,6 +93,21 @@ public final class Modules {
         return o;
     }
 
+    /**
+     * What the cluster would show if it were linked, for the preview in the app: the display's own switches, without what the
+     * display itself needs (the CAN link, a cluster) and without the display switch. So the preview works on a phone with no
+     * CANable attached.
+     */
+    public synchronized MaxidotRenderer.Options previewOptions() {
+        MaxidotRenderer.Options o = new MaxidotRenderer.Options();
+        o.nav = wanted(NAV) && effective(SOURCE);
+        o.lanes = o.nav && wanted(LANES);
+        o.exit = o.nav && wanted(EXIT);
+        o.media = wanted(MEDIA) && effective(MEDIASRC);
+        o.speed = wanted(SPEED);
+        return o;
+    }
+
     public synchronized Set<Integer> allowlist() { return new LinkedHashSet<>(allowlist); }
 
     public synchronized void setAllowlist(String text) {

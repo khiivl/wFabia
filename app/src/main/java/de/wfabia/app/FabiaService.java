@@ -167,6 +167,7 @@ public class FabiaService extends Service {
         hub.serviceRunning = true;
         ctl.post(this::apply);
         ctl.postDelayed(ticker, 1000);
+        ctl.post(previewTicker);
     }
 
     @Override
@@ -255,6 +256,23 @@ public class FabiaService extends Service {
             if (wantSpeedButNotRunning()) { speed.start(); speedRunning = speed.isRunning(); }   // permission may have been granted since
             updateNotification();
             ctl.postDelayed(this, 1000);
+        }
+    };
+
+    /**
+     * While a cluster is linked, the display controller publishes the rows it sends. Otherwise (no CANable, cluster off, display
+     * module off) the preview shows what the cluster would show, at the controller's rate, so the app can be tested on a phone.
+     */
+    private final Runnable previewTicker = new Runnable() {
+        @Override public void run() {
+            if (!hub.displayLinked) {
+                try {
+                    hub.rows = DisplayController.render(nav, mods.previewOptions(), speed);
+                } catch (RuntimeException e) {
+                    Log.w(TAG, "preview: " + e);
+                }
+            }
+            ctl.postDelayed(this, 200);
         }
     };
 

@@ -86,8 +86,10 @@ public final class DisplayController {
 
     public void setWelcomeSeconds(double s) { welcomeSeconds = s; }
 
-    String[] compute() {
-        MaxidotRenderer.Options o = options.get();
+    String[] compute() { return render(nav, options.get(), speed); }
+
+    /** the two rows the cluster shows for the current state (without the welcome); also the preview while no cluster is linked */
+    public static String[] render(NavModel nav, MaxidotRenderer.Options o, SpeedSource speed) {
         Feed.View v = nav.view(o.nav, o.media);
         Double sp = o.speed ? speed.kmh() : null;
         return MaxidotRenderer.screen(v, v.stepElapsed, sp, o);
