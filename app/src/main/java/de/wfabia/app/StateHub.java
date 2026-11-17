@@ -3,6 +3,7 @@ package de.wfabia.app;
 
 import android.content.Context;
 import de.wfabia.core.Modules;
+import de.wfabia.core.VehiclePipe;
 
 /** Process-wide state: the module switches (one instance) and what the service reports to the UI. */
 public final class StateHub {
@@ -16,6 +17,12 @@ public final class StateHub {
         if (modules == null) modules = new Modules(new PrefsStore(c.getApplicationContext()));
         return modules;
     }
+
+    /** lights and dimmer level from the CAN bus, fed by FabiaService, served to companion apps by VehiclePipeService */
+    public final VehiclePipe vehicle = new VehiclePipe();
+    /** how many companion apps are connected to the vehicle pipe, for the UI */
+    public volatile int vehicleClients;
+    public volatile String vehicleInfo = "";
 
     // written by the service threads, read by the UI
     public volatile boolean serviceRunning;

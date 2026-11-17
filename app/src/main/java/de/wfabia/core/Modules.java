@@ -17,6 +17,8 @@ public final class Modules {
     public static final String NAV = "nav", LANES = "lanes", EXIT = "exit", MEDIA = "media", SPEED = "speed";
     public static final String SNIFF = "sniff", SEND = "send", LISTEN = "listen", NOTX = "notx", DIAG = "diag", RECOVER = "recover";
     public static final String OHU = "ohu", MSESS = "msess";
+    /** the vehicle pipe: lights and dimmer level for companion apps (wRight). Read only, never transmits. */
+    public static final String VEHICLE = "vehicle";
     /** pseudo modules: some data source for navigation / for media */
     public static final String SOURCE = "source", MEDIASRC = "mediasrc";
 
@@ -33,13 +35,13 @@ public final class Modules {
     private static final String[][] NEEDS = {
         {DISPLAY, CAN}, {BRIDGE, CAN},
         {NAV, SOURCE}, {NAV, DISPLAY}, {MEDIA, MEDIASRC}, {MEDIA, DISPLAY}, {LANES, NAV}, {EXIT, NAV},
-        {SPEED, DISPLAY}, {SNIFF, BRIDGE}, {SEND, BRIDGE},
+        {SPEED, DISPLAY}, {SNIFF, BRIDGE}, {SEND, BRIDGE}, {VEHICLE, CAN},
     };
 
     /** pairs that exclude each other: listen-only never transmits, so nothing that needs to transmit can run */
     private static final String[][] CONFLICTS = {{DISPLAY, LISTEN}, {SEND, LISTEN}, {DISPLAY, NOTX}, {SEND, NOTX}};
 
-    private static final String[] ALL = {ZLINK, CAN, DISPLAY, BRIDGE, NAV, LANES, EXIT, MEDIA, SPEED, SNIFF, SEND, LISTEN, NOTX, DIAG, RECOVER, OHU, MSESS};
+    private static final String[] ALL = {ZLINK, CAN, DISPLAY, BRIDGE, NAV, LANES, EXIT, MEDIA, SPEED, SNIFF, SEND, LISTEN, NOTX, DIAG, RECOVER, OHU, MSESS, VEHICLE};
 
     private final Store store;
     private final Map<String, Boolean> want = new LinkedHashMap<>();
@@ -48,7 +50,7 @@ public final class Modules {
 
     public Modules(Store store) {
         this.store = store;
-        for (String k : ALL) want.put(k, store.getBool(k, !k.equals(SEND) && !k.equals(LISTEN) && !k.equals(NOTX) && !k.equals(DIAG) && !k.equals(RECOVER) && !k.equals(OHU) && !k.equals(MSESS)));
+        for (String k : ALL) want.put(k, store.getBool(k, !k.equals(SEND) && !k.equals(LISTEN) && !k.equals(NOTX) && !k.equals(DIAG) && !k.equals(RECOVER) && !k.equals(OHU) && !k.equals(MSESS) && !k.equals(VEHICLE)));
         want.put(SEND, false);              // sending always starts off
         store.putBool(SEND, false);
         allowlist = parseAllowlist(store.getString("allowlist", ""));

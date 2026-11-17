@@ -58,6 +58,16 @@
             </intent-filter>
         </service>
 
+        <!-- the vehicle pipe: lights and dimmer level for companion apps. Every call is checked against the whitelist
+             (package and signing certificate, empty by default), see docs/VEHICLE_PIPE.md -->
+        <service
+            android:name=".app.VehiclePipeService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="de.wfabia.action.VEHICLE_PIPE" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".app.FabiaService"
             android:exported="false"

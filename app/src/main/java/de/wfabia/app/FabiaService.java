@@ -83,6 +83,7 @@ public class FabiaService extends Service {
         broker = new CanBroker(usb, new CanBroker.Status() {
             @Override public void onLink(boolean up, String detail) {
                 hub.canUp = up;
+                hub.vehicle.setCanUp(up);
                 hub.canState = up ? ("open".equals(detail) ? "adapter open, 100 kbit/s" : "adapter open: " + detail) : detail;
                 Log.i(TAG, "CAN link " + (up ? "up" : "down: " + detail));
             }
@@ -97,6 +98,9 @@ public class FabiaService extends Service {
                 Log.d(TAG, "can " + f);
             }
         }, null, true, false);
+        // the instrument illumination (lights and dimmer wheel) for the vehicle pipe: receive only, no extra USB traffic
+        broker.subscribe(hub.vehicle::onFrame, new java.util.HashSet<>(java.util.Arrays.asList(
+            de.wfabia.core.VehiclePipe.ID_ILLUM, de.wfabia.core.VehiclePipe.ID_ILLUM_ALT)), true, false);
 
         gate = new TxGate(broker, new TxGate.Policy() {
             @Override public boolean sendEnabled() { return mods.effective(Modules.SEND); }
@@ -184,6 +188,7 @@ public class FabiaService extends Service {
     @Override
     public void onDestroy() {
         hub.serviceRunning = false;
+        hub.vehicle.setCanUp(false);
         try { unregisterReceiver(canTxReceiver); } catch (IllegalArgumentException ignored) { /* not registered */ }
         ctl.removeCallbacksAndMessages(null);
         ctlThread.quitSafely();
@@ -253,6 +258,7 @@ public class FabiaService extends Service {
             hub.ohuFrames = ohu.frames();
             hub.ohuLastMs = ohu.lastMs();
             hub.msessInfo = msess.info();
+            hub.vehicle.tick();
             if (wantSpeedButNotRunning()) { speed.start(); speedRunning = speed.isRunning(); }   // permission may have been granted since
             updateNotification();
             ctl.postDelayed(this, 1000);

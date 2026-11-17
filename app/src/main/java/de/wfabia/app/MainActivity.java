@@ -45,6 +45,8 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
     private final TextView[][] cells = new TextView[2][10];
     private TextView previewNote, helpText;
     private EditText allowEdit;
+    private SwitchMaterial wrightSwitch;
+    private VehicleWhitelist whitelist;
     private Button locationButton;
     private Modules mods;
     private StateHub hub;
@@ -70,6 +72,7 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         super.onCreate(savedInstanceState);
         hub = StateHub.get();
         mods = hub.modules(this);
+        whitelist = new VehicleWhitelist(new PrefsStore(this));
         buildUi();
         ContextCompat.startForegroundService(this, new Intent(this, FabiaService.class));
     }
@@ -175,6 +178,23 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         });
         allowRow.addView(apply);
         ((LinearLayout) bridge.detail.getParent()).addView(allowRow);
+        Card vehicle = addCard(root, Modules.VEHICLE, "Vehicle pipe", "Lights and dimmer level from the CAN bus for wRight. Receive only, nothing is sent", R.color.g2, false);
+        wrightSwitch = new SwitchMaterial(this);
+        wrightSwitch.setText("Allow wRight (" + VehicleWhitelist.WRIGHT + ")");
+        wrightSwitch.setTextSize(14);
+        wrightSwitch.setChecked(whitelist.isListed(VehicleWhitelist.WRIGHT));
+        wrightSwitch.setOnCheckedChangeListener((b, on) -> {
+            if (refreshing) return;
+            if (on) {
+                if (!whitelist.allow(getPackageManager(), VehicleWhitelist.WRIGHT)) {
+                    android.widget.Toast.makeText(this, "wRight is not installed", android.widget.Toast.LENGTH_LONG).show();
+                    b.setChecked(false);
+                }
+            } else {
+                whitelist.revoke(VehicleWhitelist.WRIGHT);
+            }
+        });
+        ((LinearLayout) vehicle.detail.getParent()).addView(wrightSwitch);
         addCard(root, "auto", "Automations", "Rules, for example windows up when parked (later)", R.color.g5, true);
 
         locationButton = new Button(this);
@@ -325,6 +345,7 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
             case Modules.CAN: return hub.canState + "\nrx " + hub.canRx + "  tx " + hub.canTx + "  dropped " + hub.canDropped + "  opened " + hub.canOpens + "x\n" + hub.txInfo + "\nusb: " + hub.usbInfo + (hub.usbEvents.isEmpty() ? "" : "  [" + hub.usbEvents + "]") + "\nadapter: " + hub.adapterInfo + "\n" + hub.lastCan;
             case Modules.DISPLAY: return hub.displayLinked ? "linked" : "not linked";
             case Modules.BRIDGE: return hub.bridgeRunning ? hub.bridgeClients + " client(s)" : "not listening";
+            case Modules.VEHICLE: return hub.vehicleClients + " app(s) connected";
             default: return "";
         }
     }
@@ -337,6 +358,11 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
             case Modules.MSESS: return hub.msessInfo;
             case Modules.DISPLAY: return hub.displayState + (mods.effective(Modules.SPEED) ? "\n" + hub.speedInfo : "");
             case Modules.BRIDGE: return hub.bridgeState + (mods.effective(Modules.SEND) ? "\nSEND ARMED (resets to off when the service restarts)" : "");
+            case Modules.VEHICLE: {
+                de.wfabia.core.VehiclePipe.State s = hub.vehicle.current();
+                return (s.valid ? "lights " + (s.lightsOn ? "on, dimmer " + s.level + " %" : "off") : "no illumination signal")
+                    + (hub.vehicleInfo.isEmpty() ? "" : "\n" + hub.vehicleInfo);
+            }
             default: return "";
         }
     }
@@ -358,6 +384,7 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
                     s.setEnabled(parentOn && mods.blockedBy(k) == null);
                 }
             }
+            if (wrightSwitch != null) wrightSwitch.setChecked(whitelist.isListed(VehicleWhitelist.WRIGHT));
             refreshPreview();
             boolean needLocation = mods.effective(Modules.SPEED)
                 && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
