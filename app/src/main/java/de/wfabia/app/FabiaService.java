@@ -88,7 +88,9 @@ public class FabiaService extends Service {
         broker = new CanBroker(usb, new CanBroker.Status() {
             @Override public void onLink(boolean up, String detail) {
                 hub.canUp = up;
-                hub.vehicle.setCanUp(up);
+                // closing the adapter for ACC_OFF is not a lost signal: the companion app (wRight) gets the last state until it goes
+                // stale on its own, not an instant "invalid" that it could take for the lights going off before it has seen ACC_OFF
+                if (up || hub.accOn) hub.vehicle.setCanUp(up);
                 hub.canState = up ? ("open".equals(detail) ? "adapter open, 100 kbit/s" : "adapter open: " + detail) : detail;
                 Log.i(TAG, "CAN link " + (up ? "up" : "down: " + detail));
             }
