@@ -217,15 +217,16 @@ public class FabiaService extends Service {
 
     /** Brings the running parts in line with the switches. Dependents stop first and start last. */
     private void apply() {
-        // with the ignition off the head unit goes to sleep: the CAN adapter and the display (its heartbeat) stop with it
-        boolean wantCan = mods.effective(Modules.CAN) && accOn, wantZlink = mods.effective(Modules.ZLINK),
-            wantDisplay = mods.effective(Modules.DISPLAY) && accOn, wantBridge = mods.effective(Modules.BRIDGE),
-            wantSpeed = mods.effective(Modules.SPEED), wantOhu = mods.effective(Modules.OHU), wantMsess = mods.effective(Modules.MSESS);
+        // ACC_OFF is the signal to shut everything down: the head unit goes into deep sleep. Nothing runs until ACC_ON.
+        boolean wantCan = mods.effective(Modules.CAN) && accOn, wantZlink = mods.effective(Modules.ZLINK) && accOn,
+            wantDisplay = mods.effective(Modules.DISPLAY) && accOn, wantBridge = mods.effective(Modules.BRIDGE) && accOn,
+            wantSpeed = mods.effective(Modules.SPEED) && accOn, wantOhu = mods.effective(Modules.OHU) && accOn,
+            wantMsess = mods.effective(Modules.MSESS) && accOn;
 
         if (!wantDisplay && displayRunning) { display.stop(); displayRunning = false; hub.displayLinked = false; if (!accOn) hub.displayState = "paused (ACC off)"; }
-        if (!wantBridge && bridgeRunning) { bridge.stop(); bridgeRunning = false; hub.bridgeRunning = false; hub.bridgeState = "off"; }
+        if (!wantBridge && bridgeRunning) { bridge.stop(); bridgeRunning = false; hub.bridgeRunning = false; hub.bridgeState = accOn ? "off" : "paused (ACC off)"; }
         if (!wantCan && canRunning) { broker.stop(); canRunning = false; hub.canState = accOn ? "off" : "paused (ACC off)"; hub.canUp = false; }
-        if (!wantZlink && zlinkRunning) { zlink.stop(); zlinkRunning = false; nav.reset(); hub.zlinkState = "off"; hub.zlinkUp = false; }
+        if (!wantZlink && zlinkRunning) { zlink.stop(); zlinkRunning = false; nav.reset(); hub.zlinkState = accOn ? "off" : "paused (ACC off)"; hub.zlinkUp = false; }
         if (!wantSpeed && speedRunning) { speed.stop(); speedRunning = false; }
         if (!wantOhu && ohuRunning) { ohu.stop(); ohuRunning = false; nav.reset(); }
         if (!wantMsess && msessRunning) { msess.stop(); msessRunning = false; }
@@ -261,12 +262,18 @@ public class FabiaService extends Service {
                 accOn = on;
                 hub.accOn = on;
                 apply();
+                if (on && tickerIdle) { tickerIdle = false; ctl.post(ticker); }
+                if (on && previewIdle) { previewIdle = false; ctl.post(previewTicker); }
             });
         }
     };
 
+    /** the periodic status updates stop with ACC_OFF and start again with ACC_ON (both on the control thread) */
+    private boolean tickerIdle, previewIdle;
+
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
+            if (!accOn) { tickerIdle = true; return; }
             hub.canRx = broker.rxCount();
             hub.canTx = broker.txCount();
             hub.canDropped = broker.droppedCount();
@@ -295,6 +302,7 @@ public class FabiaService extends Service {
      */
     private final Runnable previewTicker = new Runnable() {
         @Override public void run() {
+            if (!accOn) { previewIdle = true; return; }
             if (!hub.displayLinked) {
                 try {
                     hub.rows = DisplayController.render(nav, mods.previewOptions(), speed);
@@ -306,7 +314,7 @@ public class FabiaService extends Service {
         }
     };
 
-    private boolean wantSpeedButNotRunning() { return mods.effective(Modules.SPEED) && !speedRunning; }
+    private boolean wantSpeedButNotRunning() { return mods.effective(Modules.SPEED) && accOn && !speedRunning; }
 
     private final BroadcastReceiver canTxReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
