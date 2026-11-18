@@ -62,6 +62,7 @@ public final class DisplayController {
     // loop state
     private FisLink link;
     private long registeredGen = -1;
+    private long linkedGen = -1;        // the adapter generation of the last successful link, kept while a re-link is under way
     private boolean failedBefore;
     private String[] shown;
     private long lastSend;
@@ -73,6 +74,7 @@ public final class DisplayController {
     private long seenEpoch;
     private long registeredAt;
     private long flagZeroSince;
+    private long heartbeatOffAt;       // when the controller switched the heartbeat off for a lost adapter or a silent bus, 0 = it runs
     private boolean powerCycleNext;     // switch the heartbeat off for a while before the next registration: the cluster must see the radio disappear
     private int registerFailures;
 
@@ -159,12 +161,14 @@ public final class DisplayController {
         link = new FisLink(broker.fisAdapter(), warmup, 0.003);
         link.startHeartbeat();
         registeredGen = -1;
+        linkedGen = -1;
         failedBefore = false;
         shown = null;
         lastSend = 0;
         welcomedEpoch = -1;   // switching the display on is a start: welcome again
         quickUntil = 0;
         flagQuickTried = false;
+        heartbeatOffAt = 0;
         while (!stopped) {
             try {
                 if (!iteration()) break;
@@ -181,24 +185,48 @@ public final class DisplayController {
         link = null;
     }
 
+    /** switches the heartbeat off (once) and remembers since when */
+    private void heartbeatOff(FisLink l) {
+        if (!l.heartbeatRunning()) return;
+        l.stopHeartbeat();
+        heartbeatOffAt = System.nanoTime();
+    }
+
     /** one pass of the loop; false = stop */
     private boolean iteration() {
         FisLink l = link;
         if (!broker.isUp()) {
+            // The adapter is gone (unplugged, USB reset, head unit asleep). A real radio is off in that case, so switch the
+            // heartbeat off too: left running, the cluster sees the radio come back at once with no session, keeps its display
+            // on (the "radio" screen) and shows nothing. The registration after the adapter returns follows the heartbeat pause.
             state.accept("waiting for CAN link");
+            heartbeatOff(l);
             registeredGen = -1;
+            failedBefore = true;
+            powerCycleNext = true;
+            shown = null;
             return sleep(500);
         }
         if (!broker.busAlive()) {
             // no frames from the bus: the cluster is off or the adapter is deaf. Do not register or send into the silence;
             // the heartbeat is off too, so the cluster sees the radio gone when the bus comes back
             state.accept("waiting for CAN frames: the bus is silent (cluster off?)");
+            heartbeatOff(l);
             registeredGen = -1;
             powerCycleNext = true;
             return sleep(500);
         }
         long gen = broker.generation();
         if (registeredGen != gen) {
+            if (linkedGen != -1 && linkedGen != gen) {
+                // the adapter was reopened since the last link, possibly too fast to be seen as "down" here: the heartbeat gap was
+                // short, the cluster never saw the radio go and would refuse a new registration. Let it see the radio disappear.
+                state.accept("the adapter was reopened: linking again after a heartbeat pause");
+                linkedGen = -1;
+                quickUntil = 0;
+                failedBefore = true;
+                powerCycleNext = true;
+            }
             boolean quick = quickUntil != 0 && !powerCycleNext;
             if (quick && (System.nanoTime() > quickUntil || broker.busEpoch() != seenEpoch)) {
                 // the quick way did not hold, or the bus went quiet and came back meanwhile (ignition): let the cluster see the
@@ -213,7 +241,15 @@ public final class DisplayController {
                 powerCycleNext = false;
                 quickUntil = 0;
                 l.stopHeartbeat();
-                if (!sleep((long) (OFF_SECONDS * 1000))) return false;
+                // the cluster has already seen the radio gone for as long as the heartbeat has been off
+                long offFor = heartbeatOffAt == 0 ? 0 : (System.nanoTime() - heartbeatOffAt) / 1_000_000L;
+                long rest = (long) (OFF_SECONDS * 1000) - offFor;
+                if (rest > 0 && !sleep(rest)) return false;
+                heartbeatOffAt = 0;
+                l.startHeartbeat();
+            }
+            if (!l.heartbeatRunning()) {   // switched off while the adapter was away and no pause was due: the radio is back now
+                heartbeatOffAt = 0;
                 l.startHeartbeat();
             }
             if (quick) {
@@ -228,6 +264,7 @@ public final class DisplayController {
                 long now = System.nanoTime();
                 long epoch = broker.busEpoch();
                 registeredGen = gen;
+                linkedGen = gen;
                 failedBefore = false;
                 shown = null;
                 if (epoch != welcomedEpoch) {   // the first link of this ignition (or since the display was switched on)

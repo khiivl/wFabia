@@ -161,6 +161,44 @@ public class DisplayEndToEndTest {
         }
     }
 
+    /**
+     * The adapter drops out briefly (USB reset, head unit asleep) while the cluster restarts and still believes in the old radio.
+     * The heartbeat must be off while the adapter is away, so the cluster sees the radio disappear: the first registration after
+     * the adapter returns is accepted. With the heartbeat left running the cluster refuses it, keeps its display on and shows nothing.
+     */
+    @Test public void adapterLossSwitchesTheHeartbeatOffSoTheNextRegistrationIsAccepted() throws Exception {
+        FakeCluster fc = new FakeCluster(0x2A);
+        AtomicReference<FakeWire> current = new AtomicReference<>();
+        CanBroker broker = new CanBroker(() -> {
+            FakeWire w = FakeWire.withCluster(fc);
+            current.set(w);
+            return w;
+        }, null, 0, 50);
+        AtomicReference<String> state = new AtomicReference<>("");
+        List<String> history = Collections.synchronizedList(new ArrayList<>());
+        DisplayController dc = new DisplayController(broker, new NavModel(), MaxidotRenderer.Options::new, () -> 50.0, r -> {},
+            st -> { state.set(st); if (history.isEmpty() || !history.get(history.size() - 1).equals(st)) history.add(st); }, 0.1);
+        dc.setWelcomeSeconds(0.1);
+        broker.start();
+        dc.start();
+        try {
+            await(() -> state.get().startsWith("linked, session 0x2a"), "first link", 8000);
+            fc.restartStrict(0x55);                   // the cluster restarts, the adapter drops out at the same time
+            current.get().kill();
+            await(() -> history.contains("waiting for CAN link"), "the display noticing the lost adapter", 5000);
+            history.clear();
+            try {
+                await(() -> state.get().startsWith("linked, session 0x55"), "link after the adapter came back", 20000);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage() + "; state history: " + history + "; cluster replies: " + fc.replies, e);
+            }
+            for (String h : history) assertTrue("registration was refused: " + history, !h.contains("refused"));
+        } finally {
+            dc.stop();
+            broker.stop();
+        }
+    }
+
     @Test public void busGapTriggersRelink() throws Exception {
         FakeCluster fc = new FakeCluster(0x2A);
         FakeWire wire = FakeWire.withCluster(fc);

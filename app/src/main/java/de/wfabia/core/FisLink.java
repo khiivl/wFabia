@@ -60,6 +60,8 @@ public final class FisLink implements AutoCloseable {
         hbThread.start();
     }
 
+    public synchronized boolean heartbeatRunning() { return hbThread != null && hbThread.isAlive() && !hbStop; }
+
     /** Stop the heartbeat (and close any open transport connection) without closing the link: the cluster sees its radio switch off. */
     public void stopHeartbeat() {
         try {

@@ -23,6 +23,8 @@ public final class StateHub {
     /** how many companion apps are connected to the vehicle pipe, for the UI */
     public volatile int vehicleClients;
     public volatile String vehicleInfo = "";
+    /** the head unit's ignition line: false between ACC_OFF and ACC_ON, when the CAN adapter and the display are switched off */
+    public volatile boolean accOn = true;
 
     // written by the service threads, read by the UI
     public volatile boolean serviceRunning;

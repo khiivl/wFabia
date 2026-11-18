@@ -36,6 +36,9 @@ public class FabiaService extends Service {
     private static final String TAG = "wfabia";
     static final String ACTION_STOP = "de.wfabia.STOP";
     static final String ACTION_CAN_TX = "de.wfabia.CAN_TX";
+    /** the head unit's ignition (accessory) line, broadcast by the vendor firmware, as wRight also listens to it */
+    static final String ACTION_ACC_ON = "com.qf.action.ACC_ON";
+    static final String ACTION_ACC_OFF = "com.qf.action.ACC_OFF";
     static final String ACTION_USB_PERMISSION = "de.wfabia.USB_PERMISSION";
     static final String ACTION_ASK_USB = "de.wfabia.ASK_USB";
     static final int BRIDGE_PORT = 7788;
@@ -56,6 +59,8 @@ public class FabiaService extends Service {
     private MediaSessionSource msess;
     private HandlerThread ctlThread;
     private Handler ctl;
+    /** false between ACC_OFF and ACC_ON: the CAN adapter is closed and the display is off, so nothing is sent while the head unit sleeps */
+    private boolean accOn = true;
     private boolean zlinkRunning, canRunning, displayRunning, bridgeRunning, speedRunning, ohuRunning, msessRunning;
     private String lastNotif = "";
     private int loggedFrames;
@@ -149,6 +154,9 @@ public class FabiaService extends Service {
 
         mods.addListener(() -> ctl.post(this::apply));
         registerReceiver(canTxReceiver, new IntentFilter(ACTION_CAN_TX));
+        IntentFilter acc = new IntentFilter(ACTION_ACC_ON);
+        acc.addAction(ACTION_ACC_OFF);
+        registerReceiver(accReceiver, acc);
         // the CANable leaving and coming back (Zlink resets the USB bus when it starts): ask for permission again at once
         IntentFilter usbEvents = new IntentFilter(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED);
         usbEvents.addAction(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_DETACHED);
@@ -190,6 +198,7 @@ public class FabiaService extends Service {
         hub.serviceRunning = false;
         hub.vehicle.setCanUp(false);
         try { unregisterReceiver(canTxReceiver); } catch (IllegalArgumentException ignored) { /* not registered */ }
+        try { unregisterReceiver(accReceiver); } catch (IllegalArgumentException ignored) { /* not registered */ }
         ctl.removeCallbacksAndMessages(null);
         ctlThread.quitSafely();
         display.stop();
@@ -206,13 +215,14 @@ public class FabiaService extends Service {
 
     /** Brings the running parts in line with the switches. Dependents stop first and start last. */
     private void apply() {
-        boolean wantCan = mods.effective(Modules.CAN), wantZlink = mods.effective(Modules.ZLINK),
-            wantDisplay = mods.effective(Modules.DISPLAY), wantBridge = mods.effective(Modules.BRIDGE),
+        // with the ignition off the head unit goes to sleep: the CAN adapter and the display (its heartbeat) stop with it
+        boolean wantCan = mods.effective(Modules.CAN) && accOn, wantZlink = mods.effective(Modules.ZLINK),
+            wantDisplay = mods.effective(Modules.DISPLAY) && accOn, wantBridge = mods.effective(Modules.BRIDGE),
             wantSpeed = mods.effective(Modules.SPEED), wantOhu = mods.effective(Modules.OHU), wantMsess = mods.effective(Modules.MSESS);
 
-        if (!wantDisplay && displayRunning) { display.stop(); displayRunning = false; hub.displayLinked = false; }
+        if (!wantDisplay && displayRunning) { display.stop(); displayRunning = false; hub.displayLinked = false; if (!accOn) hub.displayState = "paused (ACC off)"; }
         if (!wantBridge && bridgeRunning) { bridge.stop(); bridgeRunning = false; hub.bridgeRunning = false; hub.bridgeState = "off"; }
-        if (!wantCan && canRunning) { broker.stop(); canRunning = false; hub.canState = "off"; hub.canUp = false; }
+        if (!wantCan && canRunning) { broker.stop(); canRunning = false; hub.canState = accOn ? "off" : "paused (ACC off)"; hub.canUp = false; }
         if (!wantZlink && zlinkRunning) { zlink.stop(); zlinkRunning = false; nav.reset(); hub.zlinkState = "off"; hub.zlinkUp = false; }
         if (!wantSpeed && speedRunning) { speed.stop(); speedRunning = false; }
         if (!wantOhu && ohuRunning) { ohu.stop(); ohuRunning = false; nav.reset(); }
@@ -240,6 +250,18 @@ public class FabiaService extends Service {
         if (wantMsess && !msessRunning) { msess.start(); msessRunning = true; }
         updateNotification();
     }
+
+    private final BroadcastReceiver accReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            final boolean on = ACTION_ACC_ON.equals(intent.getAction());
+            Log.i(TAG, "ACC " + (on ? "on" : "off"));
+            ctl.post(() -> {
+                accOn = on;
+                hub.accOn = on;
+                apply();
+            });
+        }
+    };
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
