@@ -216,8 +216,7 @@ public final class CanBroker {
                         int flagNow = data[0] & 0xFF;
                         if (flagNow != radioFlag) {
                             // what the cluster believes about the radio, for the timeline of an ignition restart
-                            LOG.info("cluster radio flag " + (radioFlag < 0 ? "?" : String.format("%02X", radioFlag)) + " -> " + String.format("%02X", flagNow)
-                                + " (heartbeat " + (hbHoldSince == 0 ? "sent" : "held") + ")");
+                            LOG.info("cluster radio flag " + (radioFlag < 0 ? "?" : String.format("%02X", radioFlag)) + " -> " + String.format("%02X", flagNow));
                         }
                         radioFlag = data[0] & 0xFF;
                         radioFlagAt = nowNs;
@@ -338,7 +337,6 @@ public final class CanBroker {
         Pending p = new Pending(id, ext, data.clone(), ttlMs > 0 ? System.nanoTime() + ttlMs * 1_000_000L : 0);
         boolean droppedNow = false;
         if (listenOnly || noTx) return false;   // listen-only and receive-only never transmit, not even the heartbeat
-        if (prio == PRIO_FIS && hbHoldSince != 0) return false;   // no radio traffic at all while the ignition is off: a row keepalive tells the cluster a radio is around
         synchronized (lock) {
             if (!up) { refusedDown.incrementAndGet(); return false; }
             Deque<Pending> q = prio == PRIO_HEARTBEAT ? hb : prio == PRIO_FIS ? fis : other;
@@ -448,47 +446,18 @@ public final class CanBroker {
     private volatile int ignition = -1;         // 1 = ignition on, 0 = off or ACC only, -1 = not seen yet
 
     /**
-     * The comfort bus keeps running with the key in the lock, so switching the ignition off and on again without taking the key out
-     * leaves no silent gap, and the head unit sees no ACC_OFF either (that comes only with the key out). The cluster still restarts
-     * and forgets its radio. The ignition bit is the signal for that: a rise from off to on counts as the bus speaking again.
+     * The key position from the cluster's terminal frame, for the log and for the display loop (it sends the rows at once when the
+     * ignition comes back). It changes nothing on the bus: the cluster answers a content message with "23 SS 00" (accepted, display
+     * off) while the ignition is off and with "27 SS 01" when it is on, and the session stays valid in between, so the radio just
+     * keeps running like a real radio does in ACC.
      */
     private void noteTerminals(int b0) {
         int now = (b0 & 0x02) != 0 ? 1 : 0;
         int was = ignition;
         if (was == now) return;
         ignition = now;
-        long t = System.nanoTime();
-        ignitionEdgeAt = t;
         LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
-        if (now == 0) {
-            ignitionOffAt = t;
-            // The radio heartbeat stops here, at the CAN level, whatever the display loop is busy with (a registration, a pause, a send):
-            // a heartbeat that is still running when the cluster boots makes it show its radio screen, empty, and refuse a registration.
-            // It stays stopped until the display loop starts it again after its pause (holdHeartbeat(false)), not when the ignition returns.
-            long lastHb = lastHbQueuedAt;
-            holdHeartbeat(true);
-            synchronized (lock) { hb.clear(); fis.clear(); }
-            LOG.info("radio traffic held; the last heartbeat frame was queued " + (lastHb == 0 ? "never" : (t - lastHb) / 1_000_000L + " ms") + " before the ignition-off frame");
-        } else if (was == 0) {
-            busEpoch.incrementAndGet();   // the ignition is back: the cluster has restarted (a flick of 0.9 s was enough for that)
-        }
     }
-
-    private volatile long ignitionOffAt, ignitionEdgeAt;
-    private volatile long hbHoldSince;          // nanoTime since which no radio frame (heartbeat, registration, rows) is sent, 0 = sent
-    private volatile long lastHbQueuedAt;       // nanoTime of the last heartbeat frame handed to the transmit queue
-
-    /** hold = true: no radio heartbeat frame is transmitted (the frames the display link asks for are dropped); false: they go out again */
-    public void holdHeartbeat(boolean hold) {
-        if (hold) { if (hbHoldSince == 0) hbHoldSince = System.nanoTime(); }
-        else hbHoldSince = 0;
-    }
-
-    /** how long the heartbeat has been held back, ms; -1 = not held */
-    public long heartbeatHeldForMs() { long h = hbHoldSince; return h == 0 ? -1 : (System.nanoTime() - h) / 1_000_000L; }
-
-    /** ms since the ignition bit last changed in either direction, even a dip too short to count as a restart; -1 = never */
-    public long ignitionEdgeAgoMs() { return ignitionEdgeAt == 0 ? -1 : (System.nanoTime() - ignitionEdgeAt) / 1_000_000L; }
 
     /** false from the first frame that shows the ignition off (key position 0 or 1); true when on or not known yet */
     public boolean ignitionOn() { return ignition != 0; }
@@ -583,10 +552,7 @@ public final class CanBroker {
         return new CanAdapter() {
             @Override public void tx(int canId, byte[] data) { CanBroker.this.tx(PRIO_FIS, canId, false, data, 0); }
             @Override public void txHeartbeat(int canId, byte[] data) {
-                if (busAlive() && hbHoldSince == 0) {
-                    lastHbQueuedAt = System.nanoTime();
-                    CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
-                }
+                if (busAlive()) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
             }
             @Override public long mark() { return fisBuf.mark(); }
             @Override public byte[] waitFor(long mark, int canId, Predicate<byte[]> pred, double timeoutSeconds) {

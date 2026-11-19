@@ -135,6 +135,20 @@ public final class FisLink implements AutoCloseable {
 
     /** Boot sequence of the radio: init message, then the "Radiodaten" message which hands us a session id. */
     public void register(boolean cleanSlate) throws IOException {
+        register(cleanSlate, null, null);
+    }
+
+    /** what the cluster answered to the content message that ends the last registration (null: none was sent or no answer) */
+    private volatile Show registerShow;
+
+    public Show registerShow() { return registerShow; }
+
+    /**
+     * Same, and the content message that ends the registration carries these rows (null: blank rows, as a real radio does). With the
+     * real rows the text is on the display one message earlier than with a blank first and the rows after it.
+     */
+    public void register(boolean cleanSlate, String top, String bottom) throws IOException {
+        registerShow = null;
         lock.lock();
         c.beginMessage();
         try {
@@ -151,8 +165,11 @@ public final class FisLink implements AutoCloseable {
                     + (reply == null ? "none" : Hex.upper(reply, reply.length)) + ")");
             }
             session = reply[1] & 0xFF;
-            // like the real radio: a blank content message in the same connection, then disconnect
-            FisTransport.sendMessage(c, contentPayload(session, blank(), blank()), FisTransport.DEFAULT_GAP);
+            // like the real radio: a content message in the same connection (blank, or the first rows), then disconnect
+            byte[] t = top == null ? blank() : MaxidotFont.padLeft(MaxidotFont.encode(top), ROW);
+            byte[] b = bottom == null ? blank() : MaxidotFont.padLeft(MaxidotFont.encode(bottom), ROW);
+            byte[] first = FisTransport.sendMessage(c, contentPayload(session, t, b), FisTransport.DEFAULT_GAP);
+            registerShow = first == null ? null : classify(first);
             FisTransport.disconnect(c);
         } finally {
             c.endMessage();
@@ -189,17 +206,53 @@ public final class FisLink implements AutoCloseable {
     /** Show two rows of up to 10 cells each (run through the font encoder). Keeps one connection open between updates
      *  (about 4 updates/s). -> true if the cluster accepted it. */
     public boolean showRows(String top, String bottom) {
+        return show(top, bottom) == Show.OK;
+    }
+
+    /**
+     * What the cluster answered to a content message (measured in the car, 2026-11-16, key positions against the replies):
+     *  27 SS 01 with the ignition on: drawn. 23 SS 00 with the ignition off or in ACC: accepted but not drawn, the session byte is
+     *  still valid. 2B SS 03: refused, the session is gone.
+     */
+    public enum Show {
+        /** drawn */ OK,
+        /** accepted, the cluster's display is off (ignition not on): keep the session, ask again later */ INACTIVE,
+        /** answered, but refused: the session byte is stale or the message was wrong */ REJECTED,
+        /** no answer at all (the cluster is busy, restarting, or the link is down) */ FAILED
+    }
+
+    static Show classify(byte[] reply) {
+        if (reply == null || reply.length == 0) return Show.REJECTED;
+        int code = reply[0] & 0xFF;
+        if (code == 0x27) return Show.OK;
+        if (code == 0x23) return Show.INACTIVE;
+        return Show.REJECTED;
+    }
+
+    private volatile String lastReply = "";
+
+    /** the last content reply as hex, for the log */
+    public String lastReply() { return lastReply; }
+
+    /** Show two rows and report what the cluster said. A definite answer (even a refusal) is final: no second try. */
+    public Show show(String top, String bottom) {
         Integer s = session;
-        if (s == null) return false;
+        if (s == null) return Show.FAILED;
         byte[] payload = contentPayload(s, MaxidotFont.padLeft(MaxidotFont.encode(top), ROW), MaxidotFont.padLeft(MaxidotFont.encode(bottom), ROW));
+        Show last = Show.FAILED;
         for (int attempt = 0; attempt < 2; attempt++) {
-            if (streamSend(payload)) return true;
+            last = streamSendResult(payload);
+            if (last != Show.FAILED) return last;
         }
-        return false;
+        return last;
     }
 
     /** Send a content payload over a persistent connection. True if the cluster answered 'accepted' (0x27). */
     boolean streamSend(byte[] payload) {
+        return streamSendResult(payload) == Show.OK;
+    }
+
+    Show streamSendResult(byte[] payload) {
         lock.lock();
         c.beginMessage();
         try {
@@ -214,12 +267,13 @@ public final class FisLink implements AutoCloseable {
                     byte[] reply = FisTransport.waitReply(c, mLast, gap);
                     if (reply != null) {
                         streamLastNanos = System.nanoTime();
-                        return reply.length > 0 && (reply[0] & 0xFF) == 0x27;
+                        lastReply = Hex.upper(reply, reply.length);
+                        return classify(reply);
                     }
                 }
                 streamClose();
             }
-            return false;
+            return Show.FAILED;
         } finally {
             c.endMessage();
             lock.unlock();
