@@ -354,7 +354,7 @@ public final class DisplayController {
                 return true;
             }
         }
-        return sleep(TICK_MS);
+        return tickWait();
     }
 
     private final Object wake = new Object();
@@ -368,10 +368,22 @@ public final class DisplayController {
         }
     }
 
+    /** A plain sleep. Every protocol wait goes through this one (the heartbeat pause, the warm-up, the retry delays): a new speed must
+     *  never cut them short, the cluster has to see the radio gone for the whole pause. */
     private boolean sleep(long ms) {
         try {
+            Thread.sleep(ms);
+            return !stopped;
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
+    /** The idle wait between two evaluations of the rows: the only wait that poke() may end early. */
+    private boolean tickWait() {
+        try {
             synchronized (wake) {
-                if (!poked) wake.wait(ms);
+                if (!poked) wake.wait(TICK_MS);
                 poked = false;
             }
             return !stopped;
