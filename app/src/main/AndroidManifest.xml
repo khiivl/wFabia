@@ -6,10 +6,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Android 10: without this (or a location foreground service) location updates stop when the app is not in front -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <application
         android:name=".app.App"
@@ -71,7 +67,7 @@
         <service
             android:name=".app.FabiaService"
             android:exported="false"
-            android:foregroundServiceType="location|connectedDevice" />
+            android:foregroundServiceType="connectedDevice" />
 
         <receiver
             android:name=".app.BootReceiver"

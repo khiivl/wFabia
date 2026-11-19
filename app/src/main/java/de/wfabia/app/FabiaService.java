@@ -53,7 +53,7 @@ public class FabiaService extends Service {
     private TxGate gate;
     private BridgeServer bridge;
     private DisplayController display;
-    private LocationSpeedSource speed;
+    private PipedSpeedSource speed;
     private UsbWireFactory usb;
     private OpenHuSource ohu;
     private MediaSessionSource msess;
@@ -75,9 +75,7 @@ public class FabiaService extends Service {
         mods = hub.modules(this);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         nm.createNotificationChannel(new NotificationChannel(CHANNEL, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW));
-        // a location foreground service may read the location in the background on Android 10 (the speed row needs it)
-        startForeground(NOTIF_ID, notification("starting"),
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+        startForeground(NOTIF_ID, notification("starting"), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
 
         ctlThread = new HandlerThread("wfabia-control");
         ctlThread.start();
@@ -146,7 +144,7 @@ public class FabiaService extends Service {
         });
         ohu = new OpenHuSource(this, nav, bridge);
         msess = new MediaSessionSource(this, nav);
-        speed = new LocationSpeedSource(this);
+        speed = hub.speed;
         display = new DisplayController(broker, nav, mods::options, speed,
             rows -> hub.rows = rows,
             s -> {
@@ -290,7 +288,6 @@ public class FabiaService extends Service {
             hub.ohuLastMs = ohu.lastMs();
             hub.msessInfo = msess.info();
             hub.vehicle.tick();
-            if (wantSpeedButNotRunning()) { speed.start(); speedRunning = speed.isRunning(); }   // permission may have been granted since
             updateNotification();
             ctl.postDelayed(this, 1000);
         }

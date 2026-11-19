@@ -25,6 +25,8 @@ public final class StateHub {
     public volatile String vehicleInfo = "";
     /** the head unit's ignition line: false between ACC_OFF and ACC_ON, when the CAN adapter and the display are switched off */
     public volatile boolean accOn = true;
+    /** the speed for the cluster: wRight owns the location service and sends its fixes over the vehicle pipe */
+    public final PipedSpeedSource speed = new PipedSpeedSource();
 
     // written by the service threads, read by the UI
     public volatile boolean serviceRunning;

@@ -30,7 +30,8 @@ public class VehiclePipeService extends Service {
     static final int T_HELLO = IBinder.FIRST_CALL_TRANSACTION,        // in: int v, int wants, String pkg, IBinder callback; out: int result, int serverVersion
         T_REQUEST_STATE = T_HELLO + 1,                                 // out: int valid, int lightsOn, int level, long seq
         T_APPLIED = T_HELLO + 2,                                       // in: int display255, int buttonsRgb, int active (oneway, informational)
-        T_BYE = T_HELLO + 3;
+        T_BYE = T_HELLO + 3,
+        T_LOCATION = T_HELLO + 4;                                      // in: int v, int flags (bit0 = has speed), float speedMs, float accuracy, String provider (oneway)
     static final int CB_STATE = IBinder.FIRST_CALL_TRANSACTION;        // in: int v, int valid, int lightsOn, int level, long seq (oneway)
     static final int R_OK = 0, R_REJECTED = 1, R_MODULE_OFF = 2;
 
@@ -55,7 +56,7 @@ public class VehiclePipeService extends Service {
     private final Binder binder = new Binder() {
         @Override
         protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
-            if (code < T_HELLO || code > T_BYE) return super.onTransact(code, data, reply, flags);
+            if (code < T_HELLO || code > T_LOCATION) return super.onTransact(code, data, reply, flags);
             data.enforceInterface(DESCRIPTOR);
             String caller = allowedCaller();
             switch (code) {
@@ -93,6 +94,18 @@ public class VehiclePipeService extends Service {
                 }
                 case T_BYE: {
                     if (caller != null) removeClient(getCallingBinderClient());
+                    return true;
+                }
+                case T_LOCATION: {
+                    // wRight's GPS fix: the speed for the cluster. Only from an allowed caller, only while the module is on
+                    if (caller != null && mods.effective(Modules.VEHICLE)) {
+                        int v = data.readInt();
+                        int fl = data.readInt();
+                        float speedMs = data.readFloat();
+                        float accuracy = data.readFloat();
+                        String provider = data.readString();
+                        if (v >= 1) hub.speed.onLocation(caller, (fl & 1) != 0, speedMs, accuracy, provider == null ? "?" : provider);
+                    }
                     return true;
                 }
                 default:
@@ -163,7 +176,10 @@ public class VehiclePipeService extends Service {
             Log.i(TAG, c.pkg + " disconnected");
         }
         hub.vehicleClients = clients.size();
-        if (clients.isEmpty()) hub.vehicleInfo = "";
+        if (clients.isEmpty()) {
+            hub.vehicleInfo = "";
+            hub.speed.clear();          // the GPS came from the client that just left
+        }
     }
 
     /** runs on the pipe's own delivery thread, never on the CAN reader */

@@ -30,7 +30,6 @@ import java.util.List;
 
 /** One screen: the live 2x10 preview and one card per module with its switch, status chip and options. */
 public class MainActivity extends AppCompatActivity implements Modules.Listener {
-    private static final int REQ_LOCATION = 1;
 
     private static final class Card {
         String key;
@@ -47,7 +46,6 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
     private EditText allowEdit;
     private SwitchMaterial wrightSwitch;
     private VehicleWhitelist whitelist;
-    private Button locationButton;
     private Modules mods;
     private StateHub hub;
     private boolean refreshing;
@@ -196,11 +194,6 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
         });
         ((LinearLayout) vehicle.detail.getParent()).addView(wrightSwitch);
         addCard(root, "auto", "Automations", "Rules, for example windows up when parked (later)", R.color.g5, true);
-
-        locationButton = new Button(this);
-        locationButton.setText("Allow location (GPS speed)");
-        locationButton.setOnClickListener(v -> ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION}, REQ_LOCATION));
-        root.addView(locationButton, margin());
 
         Button askUsb = new Button(this);
         askUsb.setText("Ask for USB permission again");
@@ -386,10 +379,6 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
             }
             if (wrightSwitch != null) wrightSwitch.setChecked(whitelist.isListed(VehicleWhitelist.WRIGHT));
             refreshPreview();
-            boolean needLocation = mods.effective(Modules.SPEED)
-                && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED);
-            locationButton.setVisibility(needLocation ? View.VISIBLE : View.GONE);
         } finally {
             refreshing = false;
         }

@@ -20,8 +20,6 @@ Spec: [`SPEC.md`](SPEC.md). Java, GPL-3.0-or-later (the cluster link is a port o
 ```bash
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell pm grant de.wfabia android.permission.ACCESS_FINE_LOCATION
-adb shell pm grant de.wfabia android.permission.ACCESS_BACKGROUND_LOCATION     # Android 10: otherwise location stops in the background
 adb shell am start -n de.wfabia/.app.MainActivity
 ```
 
