@@ -232,6 +232,13 @@ public final class DisplayController {
             shown = null;
             return sleep(200);
         }
+        if (broker.heartbeatHeldForMs() >= 0 && !powerCycleNext) {
+            // The broker cut the radio traffic at an ignition-off frame that this loop was too busy to see in time (it was inside a
+            // registration, a pause or a send) and the ignition is back: start clean, which also releases the hold. Without this the
+            // next attempts would run into the hold and fail until two failures forced a restart.
+            registeredGen = -1;
+            powerCycleNext = true;
+        }
         if (!broker.busAlive()) {
             // no frames from the bus: the cluster is off or the adapter is deaf. Do not register or send into the silence;
             // the heartbeat is off too, so the cluster sees the radio gone when the bus comes back
