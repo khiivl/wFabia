@@ -32,7 +32,7 @@ public final class DisplayController {
     /** how long the heartbeat stays off before a re-registration (the cluster drops its radio after about a second) */
     public static final double OFF_SECONDS = 3.0;
     /** the shortest warm-up before a registration, even when the cluster already reports a radio */
-    static final long MIN_RADIO_WAIT_MS = 400;
+    static final long MIN_RADIO_WAIT_MS = 200;
     /** a quick re-link episode may take this long before the slow way takes over */
     static final double QUICK_RELINK_S = 10.0;
     /** a lost session within this long of an ignition change means the cluster restarted: no quick re-links */
@@ -60,7 +60,7 @@ public final class DisplayController {
     private final double warmup;
     /** tuning on a real car without a rebuild (FabiaService sets them from debug.wfabia.* properties): heartbeat pause, warm-up (<0 = the constructor value), and whether the warm-up may end on the radio flag */
     public volatile double offSeconds = OFF_SECONDS, warmupSeconds = -1;
-    public volatile boolean flagWait = false;
+    public volatile boolean flagWait = true;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
     private volatile double quickRelinkSeconds = QUICK_RELINK_S;

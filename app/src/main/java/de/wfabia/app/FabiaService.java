@@ -272,12 +272,12 @@ public class FabiaService extends Service {
     private boolean tickerIdle, previewIdle;
 
     /** Timings of the cluster link, adjustable on a running unit: adb shell setprop debug.wfabia.off 3.0 (heartbeat pause, s),
-     *  debug.wfabia.warmup 3.0 (s before a registration), debug.wfabia.flagwait 1 (end the warm-up when the cluster reports a radio).
+     *  debug.wfabia.warmup 3.0 (s before a registration), debug.wfabia.flagwait 0 (fixed warm-up instead of ending it when the cluster reports a radio).
      *  Unset = the built-in values. */
     private void tuneDisplay() {
         display.offSeconds = sysPropDouble("debug.wfabia.off", de.wfabia.core.DisplayController.OFF_SECONDS);
         display.warmupSeconds = sysPropDouble("debug.wfabia.warmup", -1);
-        display.flagWait = sysPropDouble("debug.wfabia.flagwait", 0) > 0;
+        display.flagWait = sysPropDouble("debug.wfabia.flagwait", 1) > 0;
     }
 
     private static double sysPropDouble(String name, double def) {
