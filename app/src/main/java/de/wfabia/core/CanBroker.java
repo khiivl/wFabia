@@ -212,6 +212,7 @@ public final class CanBroker {
                     long nowNs = System.nanoTime();
                     if (lastRxNanos != 0 && nowNs - lastRxNanos > BUS_GAP_NANOS) busEpoch.incrementAndGet();   // the bus was silent and speaks again
                     if (!ext && id == ID_TERMINALS && data.length > 0) noteTerminals(data[0] & 0xFF);
+                    if (!ext && id == 0x2E8 && data.length >= 3 && (data[0] & 0xFF) == 0x39 && (data[1] & 0xFF) == 0xC0) answerClusterRequest(nowNs);
                     if (!ext && id == 0x40C && data.length > 0) {
                         int flagNow = data[0] & 0xFF;
                         if (flagNow != radioFlag) {
@@ -467,9 +468,35 @@ public final class CanBroker {
             accOnAt = t;
         } else if (!accNow && (was < 0 || accWas)) {
             accOffAt = t;
-            holdHeartbeat(true);
-            synchronized (lock) { hb.clear(); }
+            if (!answerC0) {
+                holdHeartbeat(true);
+                synchronized (lock) { hb.clear(); }
+            }
         }
+    }
+
+    /**
+     * EXPERIMENT, off unless debug.wfabia.answerc0 is set (docs/CLUSTER_BEHAVIOUR.md): the cluster polls a present radio with its own
+     * setup request (0x2E8 "39 C0 99", every 50 ms for 3 to 5 s) when it powers up or down. This answers it with the mirror of our own
+     * request: 0x4D9 "08 D0 B9" (08 = cluster, D0 = accepted, B9 = our data ID 0x6B9), at most three times per burst, and logs what it
+     * did. Nothing else is sent in reply to whatever the cluster does next; the capture shows that. While it is on, the radio is not
+     * cut when ACC falls, so that the cluster has a radio to poll.
+     */
+    public volatile boolean answerC0;
+    private long c0LastAt;
+    private int c0Answered;
+
+    private void answerClusterRequest(long nowNs) {
+        if (!answerC0) return;
+        if (nowNs - c0LastAt > 800_000_000L) {
+            c0Answered = 0;
+            LOG.info("cluster setup request 39 C0 99 seen: a polling burst starts");
+        }
+        c0LastAt = nowNs;
+        if (c0Answered >= 3) return;
+        c0Answered++;
+        boolean queued = tx(PRIO_FIS, 0x4D9, false, new byte[]{0x08, (byte) 0xD0, (byte) 0xB9}, 300);
+        LOG.info("answered the cluster's setup request with 08 D0 B9 on 0x4D9 (" + c0Answered + " of 3, queued=" + queued + ")");
     }
 
     /** hold = true: no radio heartbeat frame is transmitted; false: they go out again (the display loop releases it when the radio starts) */

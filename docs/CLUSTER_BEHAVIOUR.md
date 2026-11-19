@@ -74,6 +74,16 @@ not after the very first pulse. We do not know the exact trigger.
 - The session counter ran on monotonically through all the flicks of 2026-11-19, with one exception: after a burst a re-registration
   returned the same byte once (0x16 twice).
 
+## Experiment: answering the cluster's request (off by default)
+
+`adb shell setprop debug.wfabia.answerc0 1` switches it on (0 or unset: off; read once a second). While it is on, the radio is **not** cut when ACC
+falls (the cluster must have a radio to poll), and every `39 C0 99` the cluster sends on `0x2E8` is answered with the mirror of our own setup
+request, `08 D0 B9` on `0x4D9` (08 = cluster, D0 = accepted, B9 = our data ID 0x6B9), at most three times per burst. Nothing else is sent in reply to
+whatever the cluster does next. The log says `cluster setup request 39 C0 99 seen` and `answered ... (n of 3)`; a capture shows the reaction (does
+the cluster send `A0 ...` on `0x699`, does the burst end early, does the next registration come back with flag 01 without the radio having been
+gone). If it works, the next step is to answer the cluster's channel parameters (`A1 ...` on `0x6B9`) and ack its data packets; if the cluster
+does nothing different, the guess was wrong and costs nothing.
+
 ## Simulation
 
 `app/src/test/java/de/wfabia/core/ClusterSim.java` runs the real `DisplayController` on a simulated cluster built from the rules above

@@ -264,7 +264,7 @@ public final class DisplayController {
             displayOff = false;
             return sleep(500);
         }
-        if (!broker.accOn()) {
+        if (!broker.answerC0 && !broker.accOn()) {
             // Key at position 0: ACC is off, a real radio is off too. The broker has already stopped the heartbeat frames; the open
             // channel is closed cleanly and nothing is sent until ACC is back.
             if (radioOn) {
@@ -281,7 +281,7 @@ public final class DisplayController {
             }
             return sleep(100);
         }
-        if (!radioOn) {
+        if (!radioOn && !broker.answerC0) {
             // ACC is back: the radio boots. The registration branch below waits until the cluster has been without the radio for
             // OFF_SECONDS and has had BOOT_SECONDS to power up, then starts the heartbeat and registers.
             state.accept("key on (ACC): the radio boots");
