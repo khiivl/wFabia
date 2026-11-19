@@ -30,7 +30,7 @@ public final class DisplayController {
     /** rows are re-sent at least this often even when unchanged; a dropped session shows up within it */
     private static final double KEEPALIVE_S = 1.0;
     /** how long the heartbeat stays off before a re-registration (the cluster drops its radio after about a second) */
-    static final double OFF_SECONDS = 1.5;
+    public static final double OFF_SECONDS = 3.0;
     /** the shortest warm-up before a registration, even when the cluster already reports a radio */
     static final long MIN_RADIO_WAIT_MS = 400;
     /** a quick re-link episode may take this long before the slow way takes over */
@@ -58,6 +58,9 @@ public final class DisplayController {
     private final Consumer<String[]> preview;
     private final Consumer<String> state;
     private final double warmup;
+    /** tuning on a real car without a rebuild (FabiaService sets them from debug.wfabia.* properties): heartbeat pause, warm-up (<0 = the constructor value), and whether the warm-up may end on the radio flag */
+    public volatile double offSeconds = OFF_SECONDS, warmupSeconds = -1;
+    public volatile boolean flagWait = false;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
     private volatile double quickRelinkSeconds = QUICK_RELINK_S;
@@ -260,13 +263,13 @@ public final class DisplayController {
             }
             if (powerCycleNext) {
                 // like a real radio that switches off with the ignition: without that the cluster may keep treating us as the old, registered radio
-                state.accept("cluster restart: switching the radio heartbeat off for " + OFF_SECONDS + " s");
+                state.accept("cluster restart: switching the radio heartbeat off for " + offSeconds + " s");
                 powerCycleNext = false;
                 quickUntil = 0;
                 l.stopHeartbeat();
                 // the cluster has already seen the radio gone for as long as the heartbeat has been off
                 long offFor = heartbeatOffAt == 0 ? 0 : (System.nanoTime() - heartbeatOffAt) / 1_000_000L;
-                long rest = (long) (OFF_SECONDS * 1000) - offFor;
+                long rest = (long) (offSeconds * 1000) - offFor;
                 if (rest > 0 && !sleep(rest)) return false;
                 heartbeatOffAt = 0;
                 l.startHeartbeat();
@@ -279,7 +282,8 @@ public final class DisplayController {
                 state.accept("linking again (the radio heartbeat kept running)");
             } else {
                 state.accept("registering with the cluster");
-                if (!waitForRadio((long) (warmup * 1000))) return false;    // let the cluster see the heartbeat first
+                long warm = (long) ((warmupSeconds >= 0 ? warmupSeconds : warmup) * 1000);
+                if (!(flagWait ? waitForRadio(warm) : sleep(warm))) return false;    // let the cluster see the heartbeat first
             }
             if (!broker.isUp() || broker.generation() != gen) return true;
             try {

@@ -271,6 +271,25 @@ public class FabiaService extends Service {
     /** the periodic status updates stop with ACC_OFF and start again with ACC_ON (both on the control thread) */
     private boolean tickerIdle, previewIdle;
 
+    /** Timings of the cluster link, adjustable on a running unit: adb shell setprop debug.wfabia.off 3.0 (heartbeat pause, s),
+     *  debug.wfabia.warmup 3.0 (s before a registration), debug.wfabia.flagwait 1 (end the warm-up when the cluster reports a radio).
+     *  Unset = the built-in values. */
+    private void tuneDisplay() {
+        display.offSeconds = sysPropDouble("debug.wfabia.off", de.wfabia.core.DisplayController.OFF_SECONDS);
+        display.warmupSeconds = sysPropDouble("debug.wfabia.warmup", -1);
+        display.flagWait = sysPropDouble("debug.wfabia.flagwait", 0) > 0;
+    }
+
+    private static double sysPropDouble(String name, double def) {
+        try {
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            String v = (String) sp.getMethod("get", String.class, String.class).invoke(null, name, "");
+            return v == null || v.isEmpty() ? def : Double.parseDouble(v);
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             if (!accOn) { tickerIdle = true; return; }
@@ -290,6 +309,7 @@ public class FabiaService extends Service {
             hub.ohuLastMs = ohu.lastMs();
             hub.msessInfo = msess.info();
             hub.vehicle.tick();
+            tuneDisplay();
             updateNotification();
             ctl.postDelayed(this, 1000);
         }
