@@ -343,9 +343,23 @@ public final class DisplayController {
         return sleep(TICK_MS);
     }
 
+    private final Object wake = new Object();
+    private boolean poked;
+
+    /** something the rows depend on changed (a new speed): evaluate them now instead of at the next 200 ms tick. Any thread. */
+    public void poke() {
+        synchronized (wake) {
+            poked = true;
+            wake.notifyAll();
+        }
+    }
+
     private boolean sleep(long ms) {
         try {
-            Thread.sleep(ms);
+            synchronized (wake) {
+                if (!poked) wake.wait(ms);
+                poked = false;
+            }
             return !stopped;
         } catch (InterruptedException e) {
             return false;

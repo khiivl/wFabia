@@ -151,6 +151,7 @@ public class FabiaService extends Service {
                 hub.displayState = s;
                 hub.displayLinked = s.startsWith("linked");
             }, 3.0);
+        speed.setOnSpeed(display::poke);       // a new speed from wRight reaches the cluster at once, not at the next 200 ms tick
 
         mods.addListener(() -> ctl.post(this::apply));
         registerReceiver(canTxReceiver, new IntentFilter(ACTION_CAN_TX));

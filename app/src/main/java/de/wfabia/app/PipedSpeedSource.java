@@ -22,6 +22,11 @@ public final class PipedSpeedSource implements DisplayController.SpeedSource {
     private volatile String sender = "";
     private volatile float accuracy = -1;
 
+    private volatile Runnable onSpeed;
+
+    /** called on every new speed (binder thread): the display wakes up instead of waiting for its next tick */
+    void setOnSpeed(Runnable r) { onSpeed = r; }
+
     /** a location message from an allowed caller (called on a binder thread) */
     void onLocation(String senderPkg, boolean hasSpeed, float speedMs, float accuracy, String provider) {
         long now = SystemClock.elapsedRealtime();
@@ -34,6 +39,8 @@ public final class PipedSpeedSource implements DisplayController.SpeedSource {
             valid = true;
             speedAt = now;
             from = provider;
+            Runnable r = onSpeed;
+            if (r != null) r.run();
         }
     }
 
