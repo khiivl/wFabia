@@ -338,6 +338,7 @@ public final class CanBroker {
         Pending p = new Pending(id, ext, data.clone(), ttlMs > 0 ? System.nanoTime() + ttlMs * 1_000_000L : 0);
         boolean droppedNow = false;
         if (listenOnly || noTx) return false;   // listen-only and receive-only never transmit, not even the heartbeat
+        if (prio == PRIO_FIS && hbHoldSince != 0) return false;   // no radio traffic at all while the ignition is off: a row keepalive tells the cluster a radio is around
         synchronized (lock) {
             if (!up) { refusedDown.incrementAndGet(); return false; }
             Deque<Pending> q = prio == PRIO_HEARTBEAT ? hb : prio == PRIO_FIS ? fis : other;
@@ -464,15 +465,18 @@ public final class CanBroker {
             // The radio heartbeat stops here, at the CAN level, whatever the display loop is busy with (a registration, a pause, a send):
             // a heartbeat that is still running when the cluster boots makes it show its radio screen, empty, and refuse a registration.
             // It stays stopped until the display loop starts it again after its pause (holdHeartbeat(false)), not when the ignition returns.
+            long lastHb = lastHbQueuedAt;
             holdHeartbeat(true);
-            synchronized (lock) { hb.clear(); }
+            synchronized (lock) { hb.clear(); fis.clear(); }
+            LOG.info("radio traffic held; the last heartbeat frame was queued " + (lastHb == 0 ? "never" : (t - lastHb) / 1_000_000L + " ms") + " before the ignition-off frame");
         } else if (was == 0) {
             busEpoch.incrementAndGet();   // the ignition is back: the cluster has restarted (a flick of 0.9 s was enough for that)
         }
     }
 
     private volatile long ignitionOffAt, ignitionEdgeAt;
-    private volatile long hbHoldSince;          // nanoTime since which no heartbeat frame is sent, 0 = sent
+    private volatile long hbHoldSince;          // nanoTime since which no radio frame (heartbeat, registration, rows) is sent, 0 = sent
+    private volatile long lastHbQueuedAt;       // nanoTime of the last heartbeat frame handed to the transmit queue
 
     /** hold = true: no radio heartbeat frame is transmitted (the frames the display link asks for are dropped); false: they go out again */
     public void holdHeartbeat(boolean hold) {
@@ -579,7 +583,10 @@ public final class CanBroker {
         return new CanAdapter() {
             @Override public void tx(int canId, byte[] data) { CanBroker.this.tx(PRIO_FIS, canId, false, data, 0); }
             @Override public void txHeartbeat(int canId, byte[] data) {
-                if (busAlive() && hbHoldSince == 0) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
+                if (busAlive() && hbHoldSince == 0) {
+                    lastHbQueuedAt = System.nanoTime();
+                    CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
+                }
             }
             @Override public long mark() { return fisBuf.mark(); }
             @Override public byte[] waitFor(long mark, int canId, Predicate<byte[]> pred, double timeoutSeconds) {
