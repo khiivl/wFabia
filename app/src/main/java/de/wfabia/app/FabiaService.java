@@ -148,6 +148,7 @@ public class FabiaService extends Service {
         display = new DisplayController(broker, nav, mods::options, speed,
             rows -> hub.rows = rows,
             s -> {
+                if (!s.equals(hub.displayState)) Log.i(TAG, "display: " + s);      // the timeline of a link, for the logcat
                 hub.displayState = s;
                 hub.displayLinked = s.startsWith("linked");
             }, 3.0);
