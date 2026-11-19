@@ -327,9 +327,10 @@ public final class DisplayController {
         }
         String[] rows = nowNs < welcomeUntil ? welcomeRows((nowNs - welcomeStart) / 1e9, welcomeSeconds) : compute();
         preview.accept(rows);
-        // changed rows go out at once, but never faster than the 5 Hz the 200 ms tick used to enforce (poke() can wake the loop sooner)
-        double sinceSend = (System.nanoTime() - lastSend) / 1e9;
-        boolean due = shown == null || (!Arrays.equals(rows, shown) && sinceSend >= TICK_MS / 1000.0) || sinceSend > KEEPALIVE_S;
+        // No extra rate cap here: l.showRows() is synchronous and blocks on the cluster's ack, and this loop is single-threaded,
+        // so a new row can never go out before the cluster replied to the last one. poke() changes how soon a change is *noticed*,
+        // not how fast sends can leave; capping it at TICK_MS would just throttle below whatever the hardware can actually do.
+        boolean due = shown == null || !Arrays.equals(rows, shown) || (System.nanoTime() - lastSend) / 1e9 > KEEPALIVE_S;
         if (due) {
             if (l.showRows(rows[0], rows[1])) {
                 shown = rows;
