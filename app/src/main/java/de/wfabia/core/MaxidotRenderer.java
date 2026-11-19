@@ -261,6 +261,9 @@ public final class MaxidotRenderer {
     }
 
     // ---- screen -----------------------------------------------------------------------------------------
+    /** shown in place of the speed while there is no GPS fix */
+    static final String NO_GPS = "KEIN GPS";
+
     static String speedText(Double speed) {
         String s = String.valueOf((long) Math.rint(speed));
         while (s.length() < 3) s = " " + s;
@@ -270,14 +273,16 @@ public final class MaxidotRenderer {
     /**
      * Feed.View + time -> {row1, row2}, each exactly ROW cells of font characters.
      * @param t   seconds for the exit-name marquee (0 = not scrolled yet)
-     * @param speed km/h or null (unknown -> row 2 stays empty)
+     * @param speed km/h or null (unknown -> KEIN GPS)
      */
     public static String[] screen(Feed.View state, double t, Double speed, Options o) {
         if (o == null) o = new Options();
-        // where the speed goes: GPS jitter up to STANDSTILL_KMH counts as standing still and shows 0; no speed shows 0 too;
-        // blank only if the speed option is switched off
+        // where the speed goes: GPS jitter up to STANDSTILL_KMH counts as standing still and shows 0; no speed (no GPS fix, or
+        // wRight not delivering) shows KEIN GPS instead of a false 0; blank only if the speed option is switched off
         String blank0 = spaces(ROW);
-        String speedRow = !o.speed ? blank0 : speedText(speed == null || Math.rint(speed) <= STANDSTILL_KMH ? 0.0 : speed);
+        String speedRow = !o.speed ? blank0
+            : speed == null ? center(NO_GPS, ROW)
+            : speedText(Math.rint(speed) <= STANDSTILL_KMH ? 0.0 : speed);
         if (state.media != null) return mediaRows(state.media);
         ZlinkDecoder.Step st = state.step;
         String blank = spaces(ROW);

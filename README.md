@@ -52,7 +52,7 @@ Open Headunit has to be a build that forwards the frames and has wFabia on its w
 - Switches apply at once and persist. Switching a module off releases what it holds.
 - Dependencies: display and bridge need CAN; navigation, lanes, exit names need a source (Zlink or Open Headunit) and navigation; media needs a source or the MediaSession.
 - **Sending is off by default and resets to off when the service restarts.** It needs the *Allow send* switch **and** an id on the allowlist (empty = nothing can be sent). Every frame sent is logged (`adb logcat -s wfabia.tx`). The cluster link's own traffic is exempt. The send switch and the allowlist can only be changed in the app.
-- The speed row shows `0 KM/H` while the GPS speed is 3 km/h or less, or unknown.
+- The speed row shows `0 KM/H` while the GPS speed is 3 km/h or less, and `KEIN GPS` while there is no GPS fix (wRight not delivering, or no speed for 5 s).
 - `Serial test` talks to the CANable by hand, with switches for the USB handling variants; `Diagnostics` and `Auto-recovery` are off by default.
 
 ## PC tool

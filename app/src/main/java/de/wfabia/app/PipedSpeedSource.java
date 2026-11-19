@@ -8,10 +8,10 @@ import java.util.Locale;
 /**
  * Speed for the cluster, received from wRight over the vehicle pipe (docs/VEHICLE_PIPE.md, T_LOCATION). wRight is the only app that
  * asks the head unit's location service for fixes, so wFabia no longer holds any location registration or permission.
- * null = unknown: wRight is not connected, has no fix, or the last speed is older than 10 s.
+ * null = unknown: wRight is not connected, has no fix, or the last speed is older than 5 s (the cluster then shows KEIN GPS).
  */
 public final class PipedSpeedSource implements DisplayController.SpeedSource {
-    private static final long MAX_AGE_MS = 10_000;
+    private static final long MAX_AGE_MS = 5_000;      // no speed for this long = no GPS fix: the cluster shows KEIN GPS
 
     private volatile float speedMs;
     private volatile boolean valid;

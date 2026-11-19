@@ -43,7 +43,7 @@ Service, descriptor `de.wfabia.IVehiclePipe`, codes from `IBinder.FIRST_CALL_TRA
 
 `LOCATION` goes the other way: wRight is the only app that asks the head unit's location service for fixes, and passes the speed on
 at the fix rate (about 1 Hz). wFabia uses it for the speed row of the cluster display and holds no location registration or
-permission of its own. It is accepted only from an allowed caller while the vehicle module is on, and a speed older than 10 s counts as
+permission of its own. It is accepted only from an allowed caller while the vehicle module is on, and a speed older than 5 s counts as
 unknown.
 
 Callback, descriptor `de.wfabia.IVehiclePipeCallback`, implemented by the client (`Binder.onTransact`), oneway:
