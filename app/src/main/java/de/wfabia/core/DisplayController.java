@@ -172,6 +172,7 @@ public final class DisplayController {
     private void run() {
         // one link for the whole time the display is wanted: the heartbeat never stops between attempts or adapter hiccups
         link = new FisLink(broker.fisAdapter(), warmup, 0.003);
+        broker.holdHeartbeat(false);     // a hold from an ignition off before this start must not keep the new link silent
         link.startHeartbeat();
         registeredGen = -1;
         linkedGen = -1;
@@ -267,13 +268,16 @@ public final class DisplayController {
                 l.stopHeartbeat();
                 // the cluster has already seen the radio gone for as long as the heartbeat has been off
                 long offFor = heartbeatOffAt == 0 ? 0 : (System.nanoTime() - heartbeatOffAt) / 1_000_000L;
+                offFor = Math.max(offFor, broker.heartbeatHeldForMs());   // the broker stopped the heartbeat at the ignition-off frame already
                 long rest = (long) (offSeconds * 1000) - offFor;
                 if (rest > 0 && !sleep(rest)) return false;
                 heartbeatOffAt = 0;
+                broker.holdHeartbeat(false);
                 l.startHeartbeat();
             }
             if (!l.heartbeatRunning()) {   // switched off while the adapter was away and no pause was due: the radio is back now
                 heartbeatOffAt = 0;
+                broker.holdHeartbeat(false);
                 l.startHeartbeat();
             }
             if (quick) {

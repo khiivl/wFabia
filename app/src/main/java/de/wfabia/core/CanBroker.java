@@ -455,12 +455,27 @@ public final class CanBroker {
         LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
         if (now == 0) {
             ignitionOffAt = t;
+            // The radio heartbeat stops here, at the CAN level, whatever the display loop is busy with (a registration, a pause, a send):
+            // a heartbeat that is still running when the cluster boots makes it show its radio screen, empty, and refuse a registration.
+            // It stays stopped until the display loop starts it again after its pause (holdHeartbeat(false)), not when the ignition returns.
+            holdHeartbeat(true);
+            synchronized (lock) { hb.clear(); }
         } else if (was == 0) {
             busEpoch.incrementAndGet();   // the ignition is back: the cluster has restarted (a flick of 0.9 s was enough for that)
         }
     }
 
     private volatile long ignitionOffAt, ignitionEdgeAt;
+    private volatile long hbHoldSince;          // nanoTime since which no heartbeat frame is sent, 0 = sent
+
+    /** hold = true: no radio heartbeat frame is transmitted (the frames the display link asks for are dropped); false: they go out again */
+    public void holdHeartbeat(boolean hold) {
+        if (hold) { if (hbHoldSince == 0) hbHoldSince = System.nanoTime(); }
+        else hbHoldSince = 0;
+    }
+
+    /** how long the heartbeat has been held back, ms; -1 = not held */
+    public long heartbeatHeldForMs() { long h = hbHoldSince; return h == 0 ? -1 : (System.nanoTime() - h) / 1_000_000L; }
 
     /** ms since the ignition bit last changed in either direction, even a dip too short to count as a restart; -1 = never */
     public long ignitionEdgeAgoMs() { return ignitionEdgeAt == 0 ? -1 : (System.nanoTime() - ignitionEdgeAt) / 1_000_000L; }
@@ -558,7 +573,7 @@ public final class CanBroker {
         return new CanAdapter() {
             @Override public void tx(int canId, byte[] data) { CanBroker.this.tx(PRIO_FIS, canId, false, data, 0); }
             @Override public void txHeartbeat(int canId, byte[] data) {
-                if (busAlive()) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
+                if (busAlive() && hbHoldSince == 0) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
             }
             @Override public long mark() { return fisBuf.mark(); }
             @Override public byte[] waitFor(long mark, int canId, Predicate<byte[]> pred, double timeoutSeconds) {
