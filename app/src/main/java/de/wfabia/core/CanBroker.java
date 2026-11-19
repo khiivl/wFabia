@@ -451,6 +451,7 @@ public final class CanBroker {
         if (was == now) return;
         ignition = now;
         long t = System.nanoTime();
+        ignitionEdgeAt = t;
         LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
         if (now == 0) {
             ignitionOffAt = t;
@@ -459,7 +460,10 @@ public final class CanBroker {
         }
     }
 
-    private volatile long ignitionOffAt;
+    private volatile long ignitionOffAt, ignitionEdgeAt;
+
+    /** ms since the ignition bit last changed in either direction, even a dip too short to count as a restart; -1 = never */
+    public long ignitionEdgeAgoMs() { return ignitionEdgeAt == 0 ? -1 : (System.nanoTime() - ignitionEdgeAt) / 1_000_000L; }
     /** the ignition has to stay off this long to count: terminal 15 may drop for a moment while the engine cranks */
     private static final long IGNITION_OFF_MIN_NANOS = 1_500_000_000L;
 

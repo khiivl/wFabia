@@ -33,6 +33,8 @@ public final class DisplayController {
     static final double OFF_SECONDS = 3.0;
     /** a quick re-link episode may take this long before the slow way takes over */
     static final double QUICK_RELINK_S = 10.0;
+    /** a lost session within this long of an ignition change means the cluster restarted: no quick re-links */
+    static final long IGNITION_EDGE_RESTART_MS = 20_000;
     /** pause between quick registration attempts */
     static final long QUICK_RETRY_MS = 300;
     /** shown after the first link of an ignition (the font has capitals only) */
@@ -146,6 +148,14 @@ public final class DisplayController {
         state.accept(why);
         registeredGen = -1;
         failedBefore = true;
+        long edgeAgo = broker.ignitionEdgeAgoMs();
+        if (edgeAgo >= 0 && edgeAgo < IGNITION_EDGE_RESTART_MS) {
+            // The ignition changed a moment ago, even if only for a flick too short to count: the cluster most likely restarted and is
+            // still booting. Quick re-links would only hammer it for the whole quick period; let it see the radio go and register cleanly.
+            powerCycleNext = true;
+            quickUntil = 0;
+            return;
+        }
         if (quickUntil == 0) quickUntil = System.nanoTime() + (long) (quickRelinkSeconds * 1e9);
     }
 
