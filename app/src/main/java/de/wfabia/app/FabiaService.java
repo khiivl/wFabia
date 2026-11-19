@@ -278,6 +278,7 @@ public class FabiaService extends Service {
         display.offSeconds = sysPropDouble("debug.wfabia.off", de.wfabia.core.DisplayController.OFF_SECONDS);
         display.warmupSeconds = sysPropDouble("debug.wfabia.warmup", -1);
         display.flagWait = sysPropDouble("debug.wfabia.flagwait", 1) > 0;
+        display.bootSeconds = sysPropDouble("debug.wfabia.boot", de.wfabia.core.DisplayController.BOOT_SECONDS);
     }
 
     private static double sysPropDouble(String name, double def) {

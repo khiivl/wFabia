@@ -16,7 +16,12 @@ import java.util.logging.Logger;
  * callback and the loop carries on; it never kills the app.
  *
  * What the cluster does (measured in the car, see docs/CLUSTER_BEHAVIOUR.md):
- *  - With the key not at position 2 (ignition off, ACC) it answers a content message with "23 SS 00": accepted, display off, the
+ *  - The radio follows the ACC bit of the key frame like a real radio: key at position 0 (ACC off) the radio is off, the heartbeat
+ *    stops at once and the channel is closed; when ACC returns the radio "boots": the heartbeat starts again after the cluster has
+ *    had {@link #OFF_SECONDS} without it and {@link #BOOT_SECONDS} to power up, then it registers. A cluster that powers up while
+ *    the radio is present polls it with its own setup requests, gets no answer and keeps every session of that radio at display
+ *    flag 00 ("display off") until the radio has been gone for about 3 s.
+ *  - With ACC on and the ignition off (key position 1) it answers a content message with "23 SS 00": accepted, display off, the
  *    session byte still valid. That is not an error. The radio stays registered and the heartbeat keeps running, as a real radio
  *    does in ACC; the rows are offered once a second, and at once when the ignition comes back ("27 SS 01": drawn).
  *  - It accepts three registrations per presence of the radio and refuses every further one ("2B FF 09") until the radio has
@@ -47,6 +52,14 @@ public final class DisplayController {
     static final long QUICK_RETRY_MS = 300;
     /** how long the handshake is tried again every 0.5 s while the cluster does not answer, before the full pause is taken */
     static final double NOT_READY_MAX_S = 8.0;
+    /** after ACC returned the cluster needs this long to power up before the radio appears again (tune: debug.wfabia.boot) */
+    public static final double BOOT_SECONDS = 2.5;
+    /** a radio that came back and got a stuck session (flag 00 with the ignition on) makes the next boot wait this much longer, up to the maximum */
+    static final double BOOT_LEARN_STEP_S = 1.0, BOOT_MAX_S = 6.0;
+    /** the cluster does not answer the rows (it is starting, or busy with its own requests): ask again with the same session for this long, then register again */
+    static final double ROWS_SILENT_MAX_S = 6.0;
+    /** the display stays off although the ignition is on for this long: the session is stuck, the radio has to disappear and appear again */
+    static final double STUCK_AFTER_S = 3.0;
     /** after the ignition comes back the rows are offered this often for a moment, the display needs a little to wake up */
     static final double WAKE_PROBE_EVERY_S = 0.25, WAKE_PROBE_FOR_S = 2.0;
     /** shown after the first link of an ignition (the font has capitals only) */
@@ -71,6 +84,7 @@ public final class DisplayController {
     /** tuning on a real car without a rebuild (FabiaService sets them from debug.wfabia.* properties): heartbeat pause, warm-up (<0 = the constructor value), and whether the warm-up may end on the radio flag */
     public volatile double offSeconds = OFF_SECONDS, warmupSeconds = -1;
     public volatile boolean flagWait = true;
+    public volatile double bootSeconds = BOOT_SECONDS;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
     private volatile double quickRelinkSeconds = QUICK_RELINK_S;
@@ -98,6 +112,12 @@ public final class DisplayController {
     private boolean displayOff;         // the cluster answers "accepted, display off" (ignition not on)
     private boolean lastIgnitionOn = true;
     private long probeUntil;            // after the ignition came back: offer the rows often until then
+    private boolean radioOn = true;     // the key has ACC on: the radio runs (key position 0 = the radio is off)
+    private long failedRowsSince;       // since when the cluster has not answered the rows, 0 = it did
+    private long inactiveOnSince;       // since when the display has been off with the ignition on, 0 = not
+    private boolean reappearTried;      // the radio already disappeared and appeared for such a stuck session
+    private long radioBootedAt;         // when the radio last started after ACC returned
+    private double learnedBootS;        // the boot delay the cluster has turned out to need (0 = the default is enough)
 
     public DisplayController(CanBroker broker, NavModel nav, Supplier<MaxidotRenderer.Options> options, SpeedSource speed,
                              Consumer<String[]> preview, Consumer<String> state, double warmup) {
@@ -195,6 +215,11 @@ public final class DisplayController {
         displayOff = false;
         lastIgnitionOn = broker.ignitionOn();
         probeUntil = 0;
+        radioOn = broker.accOn();
+        if (radioOn) broker.holdHeartbeat(false);     // key at position 0 at the start: the heartbeat stays held until ACC comes
+        failedRowsSince = 0;
+        inactiveOnSince = 0;
+        reappearTried = false;
         while (!stopped) {
             try {
                 if (!iteration()) break;
@@ -239,6 +264,34 @@ public final class DisplayController {
             displayOff = false;
             return sleep(500);
         }
+        if (!broker.accOn()) {
+            // Key at position 0: ACC is off, a real radio is off too. The broker has already stopped the heartbeat frames; the open
+            // channel is closed cleanly and nothing is sent until ACC is back.
+            if (radioOn) {
+                state.accept("key off (ACC off): the radio is off, heartbeat stopped");
+                heartbeatOff(l);
+                radioOn = false;
+                registeredGen = -1;
+                shown = null;
+                displayOff = false;
+                quickUntil = 0;
+                notReadySince = 0;
+                failedRowsSince = 0;
+                inactiveOnSince = 0;
+            }
+            return sleep(100);
+        }
+        if (!radioOn) {
+            // ACC is back: the radio boots. The registration branch below waits until the cluster has been without the radio for
+            // OFF_SECONDS and has had BOOT_SECONDS to power up, then starts the heartbeat and registers.
+            state.accept("key on (ACC): the radio boots");
+            radioOn = true;
+            radioBootedAt = System.nanoTime();
+            welcomedEpoch = -1;        // a radio that boots shows its welcome
+            registeredGen = -1;
+            powerCycleNext = true;
+            displayOff = false;
+        }
         if (!broker.busAlive()) {
             // no frames from the bus: the cluster is off or the adapter is deaf. Do not register or send into the silence;
             // the heartbeat is off too, so the cluster sees the radio gone when the bus comes back
@@ -281,15 +334,20 @@ public final class DisplayController {
                 l.stopHeartbeat();
                 // the cluster has already seen the radio gone for as long as the heartbeat has been off
                 long offFor = heartbeatOffAt == 0 ? 0 : (System.nanoTime() - heartbeatOffAt) / 1_000_000L;
+                offFor = Math.max(offFor, broker.heartbeatHeldForMs());   // the broker stopped the heartbeat at the ACC fall already
                 long rest = (long) (offSeconds * 1000) - offFor;
+                rest = Math.max(rest, (long) (Math.max(bootSeconds, learnedBootS) * 1000) - broker.accOnForMs());   // and the cluster needs time to power up
                 if (rest > 0 && !sleep(rest)) return false;
+                if (!broker.accOn()) return true;      // the key went off again while we waited: the radio stays off
                 heartbeatOffAt = 0;
                 notReadySince = 0;
                 regsSinceAbsence = 0;          // the cluster forgot the radio, it counts registrations from zero again
+                broker.holdHeartbeat(false);
                 l.startHeartbeat();
             }
             if (!l.heartbeatRunning()) {   // switched off while the adapter was away and no pause was due: the radio is back now
                 heartbeatOffAt = 0;
+                broker.holdHeartbeat(false);
                 l.startHeartbeat();
             }
             if (quick) {
@@ -418,11 +476,14 @@ public final class DisplayController {
         }
         if (due) {
             FisLink.Show r = l.show(rows[0], rows[1]);
+            if (r == FisLink.Show.OK || r == FisLink.Show.INACTIVE) failedRowsSince = 0;
             switch (r) {
                 case OK:
                     shown = rows;
                     lastSend = System.nanoTime();
                     quickUntil = 0;   // the cluster takes rows again: any quick re-link episode is over
+                    inactiveOnSince = 0;
+                    reappearTried = false;
                     if (displayOff) {
                         displayOff = false;
                         state.accept("linked, session 0x" + Integer.toHexString(l.session()) + ", display on");
@@ -443,11 +504,38 @@ public final class DisplayController {
                     relinkQuickly("the cluster refused the rows (reply " + l.lastReply() + "): session lost, linking again");
                     return true;
                 default:
-                    // show() already tried twice, reconnecting in between, and got no answer at all
+                    // No answer at all: the cluster is starting or busy with its own requests. The session is probably fine, so ask again
+                    // with the same one (registering again would only use up the three registrations); after a while register again.
+                    if (failedRowsSince == 0) failedRowsSince = System.nanoTime();
+                    if ((System.nanoTime() - failedRowsSince) / 1e9 < ROWS_SILENT_MAX_S) {
+                        state.accept("the cluster is silent: asking again");
+                        return sleep(250);
+                    }
+                    failedRowsSince = 0;
                     displayOff = false;
                     relinkQuickly("the cluster did not answer the rows: linking again");
                     return true;
             }
+        }
+        if (displayOff && ignitionOn && broker.accOn()) {
+            // The display stays off although the key is at position 2: the session was registered while the cluster was powering up
+            // and is stuck at flag 00. Only a radio that disappears for 3 s and appears again gets an active display.
+            if (inactiveOnSince == 0) inactiveOnSince = nowNs;
+            if (!reappearTried && (nowNs - inactiveOnSince) / 1e9 > STUCK_AFTER_S) {
+                reappearTried = true;
+                if ((nowNs - radioBootedAt) / 1e9 < 20.0) {
+                    // the radio appeared while the cluster was still powering up: next time it waits longer
+                    learnedBootS = Math.min(BOOT_MAX_S, Math.max(bootSeconds, learnedBootS) + BOOT_LEARN_STEP_S);
+                    state.accept("the radio appeared too early after the key came on: the next boot waits " + learnedBootS + " s");
+                }
+                state.accept("the display stays off with the ignition on: the radio disappears and appears again");
+                registeredGen = -1;
+                powerCycleNext = true;
+                return true;
+            }
+        } else if (!displayOff || !ignitionOn) {
+            inactiveOnSince = 0;
+            if (!ignitionOn) reappearTried = false;
         }
         return tickWait();
     }

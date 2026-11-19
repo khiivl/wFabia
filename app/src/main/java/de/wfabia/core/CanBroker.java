@@ -443,24 +443,55 @@ public final class CanBroker {
 
     /** terminal status of the cluster: byte 0 bit0 = key in, bit2 = ACC, bit1 = ignition (15): 01 key in, 05 ACC, 07 ignition on */
     private static final int ID_TERMINALS = 0x271;
-    private volatile int ignition = -1;         // 1 = ignition on, 0 = off or ACC only, -1 = not seen yet
+    private volatile int keyByte = -1;           // 0x271 byte 0: bit 0 key in, bit 1 ignition, bit 2 ACC; -1 = not seen yet
+    private volatile long accOnAt, accOffAt;     // nanoTime of the last rise / fall of the ACC bit, 0 = never
+    private volatile long hbHoldSince;           // nanoTime since which no radio heartbeat frame is sent, 0 = sent
 
     /**
-     * The key position from the cluster's terminal frame, for the log and for the display loop (it sends the rows at once when the
-     * ignition comes back). It changes nothing on the bus: the cluster answers a content message with "23 SS 00" (accepted, display
-     * off) while the ignition is off and with "27 SS 01" when it is on, and the session stays valid in between, so the radio just
-     * keeps running like a real radio does in ACC.
+     * The key position from the cluster's terminal frame. The ACC bit is the power of a real radio: with the key at position 0
+     * (b0 = 01) the radio is off, at position 1 (05) and 2 (07) it runs. So when ACC falls the heartbeat stops at once, here, whatever
+     * the display loop is busy with, and it stays stopped until the display loop starts it again after its pause: a cluster that
+     * powers up while the radio is present polls it with its own setup requests (0x2E8 "39 C0 99", 3 to 5 s), gets no answer, and
+     * then keeps every session of that radio at display flag 00 until the radio has been gone for about 3 s.
+     * Ignition off with ACC on (key position 1) changes nothing for the radio: the cluster answers "23 SS 00" and the session lives on.
      */
     private void noteTerminals(int b0) {
-        int now = (b0 & 0x02) != 0 ? 1 : 0;
-        int was = ignition;
-        if (was == now) return;
-        ignition = now;
-        LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
+        int was = keyByte;
+        if (was == b0) return;
+        keyByte = b0;
+        long t = System.nanoTime();
+        boolean accNow = (b0 & 0x04) != 0, accWas = was >= 0 && (was & 0x04) != 0;
+        LOG.info("key b0=" + String.format("%02X", b0) + (was >= 0 ? " (was " + String.format("%02X", was) + ")" : "")
+            + " acc " + (accNow ? "on" : "off") + ", ignition " + ((b0 & 0x02) != 0 ? "on" : "off"));
+        if (accNow && !accWas && was >= 0) {      // a real rise: the first frame after the start is not one
+            accOnAt = t;
+        } else if (!accNow && (was < 0 || accWas)) {
+            accOffAt = t;
+            holdHeartbeat(true);
+            synchronized (lock) { hb.clear(); }
+        }
     }
 
-    /** false from the first frame that shows the ignition off (key position 0 or 1); true when on or not known yet */
-    public boolean ignitionOn() { return ignition != 0; }
+    /** hold = true: no radio heartbeat frame is transmitted; false: they go out again (the display loop releases it when the radio starts) */
+    public void holdHeartbeat(boolean hold) {
+        if (hold) { if (hbHoldSince == 0) hbHoldSince = System.nanoTime(); }
+        else hbHoldSince = 0;
+    }
+
+    /** how long the heartbeat has been held back, ms; -1 = not held */
+    public long heartbeatHeldForMs() { long h = hbHoldSince; return h == 0 ? -1 : (System.nanoTime() - h) / 1_000_000L; }
+
+    /** key at position 1 or 2 (the radio has power); true when not known yet */
+    public boolean accOn() { return keyByte < 0 || (keyByte & 0x04) != 0; }
+
+    /** ms since ACC rose; a large number when it never did or has been on since the start */
+    public long accOnForMs() { long t = accOnAt; return t == 0 ? Long.MAX_VALUE / 4 : (System.nanoTime() - t) / 1_000_000L; }
+
+    /** ignition on (key position 2); true when not known yet */
+    public boolean ignitionOn() { return keyByte < 0 || (keyByte & 0x02) != 0; }
+
+    /** the key byte of frame 0x271, -1 if not seen yet */
+    public int keyByte() { return keyByte; }
 
     private static final long BUS_GAP_NANOS = 1_500_000_000L;
     private final AtomicLong busEpoch = new AtomicLong();
@@ -552,7 +583,7 @@ public final class CanBroker {
         return new CanAdapter() {
             @Override public void tx(int canId, byte[] data) { CanBroker.this.tx(PRIO_FIS, canId, false, data, 0); }
             @Override public void txHeartbeat(int canId, byte[] data) {
-                if (busAlive()) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
+                if (busAlive() && hbHoldSince == 0) CanBroker.this.tx(PRIO_HEARTBEAT, canId, false, data, 0);
             }
             @Override public long mark() { return fisBuf.mark(); }
             @Override public byte[] waitFor(long mark, int canId, Predicate<byte[]> pred, double timeoutSeconds) {
