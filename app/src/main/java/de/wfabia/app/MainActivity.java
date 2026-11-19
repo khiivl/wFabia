@@ -377,7 +377,9 @@ public class MainActivity extends AppCompatActivity implements Modules.Listener 
                     s.setEnabled(parentOn && mods.blockedBy(k) == null);
                 }
             }
-            if (wrightSwitch != null) wrightSwitch.setChecked(whitelist.isListed(VehicleWhitelist.WRIGHT));
+            // on only when the installed wRight really is allowed: a wRight signed with another key than the one that was allowed
+            // is rejected, so the switch shows off and switching it on pins the installed certificate again
+            if (wrightSwitch != null) wrightSwitch.setChecked(whitelist.isAllowed(getPackageManager(), VehicleWhitelist.WRIGHT));
             refreshPreview();
         } finally {
             refreshing = false;
