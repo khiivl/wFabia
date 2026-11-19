@@ -63,6 +63,10 @@ public final class DisplayController {
     public volatile double fastPauseSeconds = 0.8;
     /** a registration was refused (or the session dropped without an ignition change) since the last link: the next pause is the full offSeconds */
     private boolean slowPause;
+    /** since when the cluster has not answered the connection setup (it is still starting), 0 = it did, or no attempt is under way */
+    private long notReadySince;
+    /** how long the handshake is tried again every 0.5 s while the cluster does not answer, before the full pause is taken */
+    static final double NOT_READY_MAX_S = 8.0;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
     private volatile double quickRelinkSeconds = QUICK_RELINK_S;
@@ -231,6 +235,7 @@ public final class DisplayController {
             // is dark and loses its radio. Behave like a radio that dies with the ignition: the heartbeat off now, so that the cluster
             // sees it gone, and a clean registration the moment the ignition comes back (the bus epoch changes with it).
             state.accept("waiting for the ignition (key position 2)");
+            notReadySince = 0;
             heartbeatOff(l);
             registeredGen = -1;
             powerCycleNext = true;
@@ -285,6 +290,7 @@ public final class DisplayController {
                 long rest = (long) (pauseS * 1000) - offFor;
                 if (rest > 0 && !sleep(rest)) return false;
                 heartbeatOffAt = 0;
+                notReadySince = 0;
                 broker.holdHeartbeat(false);
                 l.startHeartbeat();
             }
@@ -297,8 +303,10 @@ public final class DisplayController {
                 state.accept("linking again (the radio heartbeat kept running)");
             } else {
                 state.accept("registering with the cluster");
-                long warm = (long) ((warmupSeconds >= 0 ? warmupSeconds : warmup) * 1000);
-                if (!(flagWait ? waitForRadio(warm) : sleep(warm))) return false;    // let the cluster see the heartbeat first
+                if (notReadySince == 0) {   // a retry while the cluster is still starting needs no new warm-up: the heartbeat has been running
+                    long warm = (long) ((warmupSeconds >= 0 ? warmupSeconds : warmup) * 1000);
+                    if (!(flagWait ? waitForRadio(warm) : sleep(warm))) return false;    // let the cluster see the heartbeat first
+                }
             }
             if (!broker.isUp() || broker.generation() != gen) return true;
             try {
@@ -309,6 +317,7 @@ public final class DisplayController {
                 linkedGen = gen;
                 failedBefore = false;
                 slowPause = false;
+                notReadySince = 0;
                 shown = null;
                 if (epoch != welcomedEpoch) {   // the first link of this ignition (or since the display was switched on)
                     welcomedEpoch = epoch;
@@ -328,17 +337,27 @@ public final class DisplayController {
                     state.accept("linking again: " + e.getMessage() + " (retrying)");
                     return sleep(QUICK_RETRY_MS);
                 }
-                if (!slowPause) {
-                    slowPause = true;          // the short pause was not enough: the retry goes through the full pause
-                    powerCycleNext = true;
-                } else if (++registerFailures >= 2) {
-                    powerCycleNext = true;     // refused twice: let the cluster see the radio disappear
-                }
                 LOG.info("registration failed: " + e.getMessage());
+                boolean notReady = e.getMessage() != null && e.getMessage().startsWith("Cluster did not answer");
+                if (notReady) {
+                    // The cluster is not up yet (a very short flick: it is still restarting). It holds no stale state, so the heartbeat
+                    // stays on and the handshake is tried again shortly; only if it stays silent for a long time the full pause follows.
+                    if (notReadySince == 0) notReadySince = System.nanoTime();
+                    if ((System.nanoTime() - notReadySince) / 1e9 < NOT_READY_MAX_S) {
+                        state.accept("the cluster is not up yet: trying again");
+                        return sleep(500);
+                    }
+                }
+                // Refused (or silent for too long): the cluster holds a state that only a radio that has been gone for a while clears.
+                // The heartbeat pause starts now, with no waiting first (the heartbeat running without a session is the blank).
+                notReadySince = 0;
+                slowPause = true;
+                powerCycleNext = true;
+                registerFailures++;
                 long ago = broker.millisSinceRx();
                 state.accept("cluster: " + e.getMessage() + " (retrying). bus: rx " + broker.rxCount() + ", tx " + broker.txCount()
                     + ", last frame from the bus " + (ago < 0 ? "never" : ago + " ms ago") + ", dropped " + broker.droppedCount());
-                return sleep(3000);
+                return true;
             }
             return true;
         }
