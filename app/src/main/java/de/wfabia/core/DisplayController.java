@@ -207,6 +207,17 @@ public final class DisplayController {
             shown = null;
             return sleep(500);
         }
+        if (!broker.ignitionOn()) {
+            // Key at position 0 or 1 with the key still in the lock: the bus runs on and the head unit gets no ACC_OFF, but the cluster
+            // is dark and loses its radio. Behave like a radio that dies with the ignition: the heartbeat off now, so that the cluster
+            // sees it gone, and a clean registration the moment the ignition comes back (the bus epoch changes with it).
+            state.accept("waiting for the ignition (key position 2)");
+            heartbeatOff(l);
+            registeredGen = -1;
+            powerCycleNext = true;
+            shown = null;
+            return sleep(200);
+        }
         if (!broker.busAlive()) {
             // no frames from the bus: the cluster is off or the adapter is deaf. Do not register or send into the silence;
             // the heartbeat is off too, so the cluster sees the radio gone when the bus comes back

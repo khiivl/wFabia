@@ -211,6 +211,7 @@ public final class CanBroker {
                     rxCount.incrementAndGet();
                     long nowNs = System.nanoTime();
                     if (lastRxNanos != 0 && nowNs - lastRxNanos > BUS_GAP_NANOS) busEpoch.incrementAndGet();   // the bus was silent and speaks again
+                    if (!ext && id == ID_TERMINALS && data.length > 0) noteTerminals(data[0] & 0xFF);
                     if (!ext && id == 0x40C && data.length > 0) {
                         radioFlag = data[0] & 0xFF;
                         radioFlagAt = nowNs;
@@ -434,6 +435,36 @@ public final class CanBroker {
             w.write(new byte[]{'F', '\r'});
         }
     }
+
+    /** terminal status of the cluster: byte 0 bit0 = key in, bit2 = ACC, bit1 = ignition (15): 01 key in, 05 ACC, 07 ignition on */
+    private static final int ID_TERMINALS = 0x271;
+    private volatile int ignition = -1;         // 1 = ignition on, 0 = off or ACC only, -1 = not seen yet
+
+    /**
+     * The comfort bus keeps running with the key in the lock, so switching the ignition off and on again without taking the key out
+     * leaves no silent gap, and the head unit sees no ACC_OFF either (that comes only with the key out). The cluster still restarts
+     * and forgets its radio. The ignition bit is the signal for that: a rise from off to on counts as the bus speaking again.
+     */
+    private void noteTerminals(int b0) {
+        int now = (b0 & 0x02) != 0 ? 1 : 0;
+        int was = ignition;
+        if (was == now) return;
+        ignition = now;
+        long t = System.nanoTime();
+        LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
+        if (now == 0) {
+            ignitionOffAt = t;
+        } else if (was == 0 && t - ignitionOffAt >= IGNITION_OFF_MIN_NANOS) {
+            busEpoch.incrementAndGet();   // off long enough for the cluster to have restarted (not the dip of an engine start)
+        }
+    }
+
+    private volatile long ignitionOffAt;
+    /** the ignition has to stay off this long to count: terminal 15 may drop for a moment while the engine cranks */
+    private static final long IGNITION_OFF_MIN_NANOS = 1_500_000_000L;
+
+    /** false while the ignition is known to have been off for 1.5 s (key position 0 or 1); true when on, not known yet, or just dipped */
+    public boolean ignitionOn() { return ignition != 0 || System.nanoTime() - ignitionOffAt < IGNITION_OFF_MIN_NANOS; }
 
     private static final long BUS_GAP_NANOS = 1_500_000_000L;
     private final AtomicLong busEpoch = new AtomicLong();
