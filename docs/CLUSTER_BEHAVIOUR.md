@@ -74,15 +74,20 @@ not after the very first pulse. We do not know the exact trigger.
 - The session counter ran on monotonically through all the flicks of 2026-11-19, with one exception: after a burst a re-registration
   returned the same byte once (0x16 twice).
 
-## Experiment: answering the cluster's request (off by default)
+## Answering the cluster's polling (on by default, tested 2026-11-20)
 
-`adb shell setprop debug.wfabia.answerc0 1` switches it on (0 or unset: off; read once a second). While it is on, the radio is **not** cut when ACC
-falls (the cluster must have a radio to poll), and every `39 C0 99` the cluster sends on `0x2E8` is answered with the mirror of our own setup
-request, `08 D0 B9` on `0x4D9` (08 = cluster, D0 = accepted, B9 = our data ID 0x6B9), at most three times per burst. Nothing else is sent in reply to
-whatever the cluster does next. The log says `cluster setup request 39 C0 99 seen` and `answered ... (n of 3)`; a capture shows the reaction (does
-the cluster send `A0 ...` on `0x699`, does the burst end early, does the next registration come back with flag 01 without the radio having been
-gone). If it works, the next step is to answer the cluster's channel parameters (`A1 ...` on `0x6B9`) and ack its data packets; if the cluster
-does nothing different, the guess was wrong and costs nothing.
+Every `39 C0 99` the cluster sends on `0x2E8` is answered with the mirror of our own setup request, `08 D0 B9` on `0x4D9` (08 = cluster, D0 = accepted,
+B9 = our data ID 0x6B9), at most three times per burst, and only while the display loop is the radio (heartbeat running). It was a guess, and
+it worked: the cluster answers within 25 ms with its channel parameters, `A0 04 8A 85 43 94` on `0x699` (we do not answer these yet), stops polling
+(one burst ended after a single request, the others after 1.7 and 2.1 s instead of 3 to 5 s), accepts our next ordinary setup, and draws on the **old
+session** (`27 SS 01`) 1.26 to 2.17 s after the key came back, with no registration and no break in the heartbeat. Three key-0 flicks of about 0.5 s.
+
+With this on the radio is not cut when ACC falls any more (nothing to hide from the polling). `adb shell setprop debug.wfabia.answerc0 0` switches it off
+(read once a second) and brings back the radio that follows ACC (heartbeat off at the ACC fall, back 3 s later plus 2.5 s of power-up, learned upward).
+The stuck-session recovery stays in both modes.
+
+Next steps if it should be quicker: answer the cluster's `A0` (channel parameters) with `A1 04 82 84 82 B2` on `0x6B9` and ack its data packets, and
+offer the rows sooner after the key returns than the 0.25 s to 1 s probing of the display loop.
 
 ## Simulation
 

@@ -279,7 +279,7 @@ public class FabiaService extends Service {
         display.warmupSeconds = sysPropDouble("debug.wfabia.warmup", -1);
         display.flagWait = sysPropDouble("debug.wfabia.flagwait", 1) > 0;
         display.bootSeconds = sysPropDouble("debug.wfabia.boot", de.wfabia.core.DisplayController.BOOT_SECONDS);
-        broker.answerC0 = sysPropDouble("debug.wfabia.answerc0", 0) > 0;     // experiment: answer the cluster's own setup requests
+        broker.answerC0 = sysPropDouble("debug.wfabia.answerc0", 1) > 0;     // answer the cluster's own setup requests (0 = off)
     }
 
     private static double sysPropDouble(String name, double def) {

@@ -476,18 +476,26 @@ public final class CanBroker {
     }
 
     /**
-     * EXPERIMENT, off unless debug.wfabia.answerc0 is set (docs/CLUSTER_BEHAVIOUR.md): the cluster polls a present radio with its own
-     * setup request (0x2E8 "39 C0 99", every 50 ms for 3 to 5 s) when it powers up or down. This answers it with the mirror of our own
-     * request: 0x4D9 "08 D0 B9" (08 = cluster, D0 = accepted, B9 = our data ID 0x6B9), at most three times per burst, and logs what it
-     * did. Nothing else is sent in reply to whatever the cluster does next; the capture shows that. While it is on, the radio is not
-     * cut when ACC falls, so that the cluster has a radio to poll.
+     * The cluster polls a present radio with its own setup request (0x2E8 "39 C0 99", every 50 ms for 3 to 5 s) when it powers up or
+     * down. A radio that does not answer is disabled (display flag 00) until it has been gone for 3 s. This answers the request with the
+     * mirror of our own setup request: 0x4D9 "08 D0 B9" (08 = cluster, D0 = accepted, B9 = our data ID 0x6B9), at most three times per
+     * burst, and only while the display loop really is the radio (heartbeat running, not held). Measured in the car on 2026-11-20: the
+     * cluster answers with its channel parameters ("A0 04 8A 85 43 94" on 0x699), stops polling, accepts our next ordinary setup and
+     * draws on the old session ("27 SS 01") 1.3 to 2.2 s after the key returns, with no registration and no gap in the heartbeat. On by
+     * default; debug.wfabia.answerc0=0 switches it off, and then the radio is cut when ACC falls instead (docs/CLUSTER_BEHAVIOUR.md).
      */
-    public volatile boolean answerC0;
+    public volatile boolean answerC0 = true;
+    private volatile java.util.function.BooleanSupplier radioPresent;
+
+    /** the display loop says whether it is the radio right now (its heartbeat runs); null = no radio emulation at all */
+    public void setRadioPresent(java.util.function.BooleanSupplier p) { radioPresent = p; }
     private long c0LastAt;
     private int c0Answered;
 
     private void answerClusterRequest(long nowNs) {
         if (!answerC0) return;
+        java.util.function.BooleanSupplier present = radioPresent;
+        if (present == null || !present.getAsBoolean() || hbHoldSince != 0) return;   // only a radio that is really there answers
         if (nowNs - c0LastAt > 800_000_000L) {
             c0Answered = 0;
             LOG.info("cluster setup request 39 C0 99 seen: a polling burst starts");

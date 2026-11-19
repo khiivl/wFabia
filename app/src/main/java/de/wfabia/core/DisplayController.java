@@ -200,6 +200,8 @@ public final class DisplayController {
     private void run() {
         // one link for the whole time the display is wanted: the heartbeat never stops between attempts or adapter hiccups
         link = new FisLink(broker.fisAdapter(), warmup, 0.003);
+        final FisLink mine = link;
+        broker.setRadioPresent(mine::heartbeatRunning);      // the broker answers the cluster's polling only while this is the radio
         link.startHeartbeat();
         registeredGen = -1;
         linkedGen = -1;
@@ -232,6 +234,7 @@ public final class DisplayController {
                 if (!sleep(3000)) break;
             }
         }
+        broker.setRadioPresent(null);
         link.close();
         link = null;
     }
