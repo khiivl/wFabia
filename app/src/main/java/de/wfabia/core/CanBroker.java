@@ -455,8 +455,8 @@ public final class CanBroker {
         LOG.info("ignition " + (now == 1 ? "on" : "off") + " (0x271 b0=" + String.format("%02X", b0) + ")");
         if (now == 0) {
             ignitionOffAt = t;
-        } else if (was == 0 && t - ignitionOffAt >= IGNITION_OFF_MIN_NANOS) {
-            busEpoch.incrementAndGet();   // off long enough for the cluster to have restarted (not the dip of an engine start)
+        } else if (was == 0) {
+            busEpoch.incrementAndGet();   // the ignition is back: the cluster has restarted (a flick of 0.9 s was enough for that)
         }
     }
 
@@ -464,11 +464,9 @@ public final class CanBroker {
 
     /** ms since the ignition bit last changed in either direction, even a dip too short to count as a restart; -1 = never */
     public long ignitionEdgeAgoMs() { return ignitionEdgeAt == 0 ? -1 : (System.nanoTime() - ignitionEdgeAt) / 1_000_000L; }
-    /** the ignition has to stay off this long to count: terminal 15 may drop for a moment while the engine cranks */
-    private static final long IGNITION_OFF_MIN_NANOS = 1_500_000_000L;
 
-    /** false while the ignition is known to have been off for 1.5 s (key position 0 or 1); true when on, not known yet, or just dipped */
-    public boolean ignitionOn() { return ignition != 0 || System.nanoTime() - ignitionOffAt < IGNITION_OFF_MIN_NANOS; }
+    /** false from the first frame that shows the ignition off (key position 0 or 1); true when on or not known yet */
+    public boolean ignitionOn() { return ignition != 0; }
 
     private static final long BUS_GAP_NANOS = 1_500_000_000L;
     private final AtomicLong busEpoch = new AtomicLong();

@@ -151,7 +151,7 @@ public class FabiaService extends Service {
                 if (!s.equals(hub.displayState)) Log.i(TAG, "display: " + s);      // the timeline of a link, for the logcat
                 hub.displayState = s;
                 hub.displayLinked = s.startsWith("linked");
-            }, 3.0);
+            }, 1.5);
         speed.setOnSpeed(display::poke);       // a new speed from wRight reaches the cluster at once, not at the next 200 ms tick
 
         mods.addListener(() -> ctl.post(this::apply));
