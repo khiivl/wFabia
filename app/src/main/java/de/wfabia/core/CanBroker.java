@@ -213,6 +213,12 @@ public final class CanBroker {
                     if (lastRxNanos != 0 && nowNs - lastRxNanos > BUS_GAP_NANOS) busEpoch.incrementAndGet();   // the bus was silent and speaks again
                     if (!ext && id == ID_TERMINALS && data.length > 0) noteTerminals(data[0] & 0xFF);
                     if (!ext && id == 0x40C && data.length > 0) {
+                        int flagNow = data[0] & 0xFF;
+                        if (flagNow != radioFlag) {
+                            // what the cluster believes about the radio, for the timeline of an ignition restart
+                            LOG.info("cluster radio flag " + (radioFlag < 0 ? "?" : String.format("%02X", radioFlag)) + " -> " + String.format("%02X", flagNow)
+                                + " (heartbeat " + (hbHoldSince == 0 ? "sent" : "held") + ")");
+                        }
                         radioFlag = data[0] & 0xFF;
                         radioFlagAt = nowNs;
                     }
