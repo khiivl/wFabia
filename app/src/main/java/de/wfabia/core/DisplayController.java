@@ -30,7 +30,9 @@ public final class DisplayController {
     /** rows are re-sent at least this often even when unchanged; a dropped session shows up within it */
     private static final double KEEPALIVE_S = 1.0;
     /** how long the heartbeat stays off before a re-registration (the cluster drops its radio after about a second) */
-    static final double OFF_SECONDS = 3.0;
+    static final double OFF_SECONDS = 1.5;
+    /** the shortest warm-up before a registration, even when the cluster already reports a radio */
+    static final long MIN_RADIO_WAIT_MS = 400;
     /** a quick re-link episode may take this long before the slow way takes over */
     static final double QUICK_RELINK_S = 10.0;
     /** a lost session within this long of an ignition change means the cluster restarted: no quick re-links */
@@ -277,7 +279,7 @@ public final class DisplayController {
                 state.accept("linking again (the radio heartbeat kept running)");
             } else {
                 state.accept("registering with the cluster");
-                if (!sleep((long) (warmup * 1000))) return false;    // let the cluster see the heartbeat first
+                if (!waitForRadio((long) (warmup * 1000))) return false;    // let the cluster see the heartbeat first
             }
             if (!broker.isUp() || broker.generation() != gen) return true;
             try {
@@ -387,6 +389,22 @@ public final class DisplayController {
         } catch (InterruptedException e) {
             return false;
         }
+    }
+
+    /**
+     * The warm-up before a registration: ends as soon as the cluster says it sees a radio (its 0x40C frame, byte 0 above 0, seen
+     * within the last 400 ms), but not before MIN_RADIO_WAIT_MS after the heartbeat started, so that a flag from before the pause
+     * is not taken for the new heartbeat. maxMs is the old fixed warm-up, kept as the ceiling when the flag never comes.
+     */
+    private boolean waitForRadio(long maxMs) {
+        long t0 = System.nanoTime();
+        while (!stopped) {
+            long waited = (System.nanoTime() - t0) / 1_000_000L;
+            if (waited >= maxMs) return true;
+            if (waited >= MIN_RADIO_WAIT_MS && broker.radioFlag() > 0 && broker.radioFlagAgeMs() >= 0 && broker.radioFlagAgeMs() < 400) return true;
+            if (!sleep(50)) return false;
+        }
+        return false;
     }
 
     /** The idle wait between two evaluations of the rows: the only wait that poke() may end early. */
