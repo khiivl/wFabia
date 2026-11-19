@@ -327,7 +327,9 @@ public final class DisplayController {
         }
         String[] rows = nowNs < welcomeUntil ? welcomeRows((nowNs - welcomeStart) / 1e9, welcomeSeconds) : compute();
         preview.accept(rows);
-        boolean due = shown == null || !Arrays.equals(rows, shown) || (System.nanoTime() - lastSend) / 1e9 > KEEPALIVE_S;
+        // changed rows go out at once, but never faster than the 5 Hz the 200 ms tick used to enforce (poke() can wake the loop sooner)
+        double sinceSend = (System.nanoTime() - lastSend) / 1e9;
+        boolean due = shown == null || (!Arrays.equals(rows, shown) && sinceSend >= TICK_MS / 1000.0) || sinceSend > KEEPALIVE_S;
         if (due) {
             if (l.showRows(rows[0], rows[1])) {
                 shown = rows;
