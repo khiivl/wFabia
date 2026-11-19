@@ -277,6 +277,7 @@ public class FabiaService extends Service {
     private void tuneDisplay() {
         display.offSeconds = sysPropDouble("debug.wfabia.off", de.wfabia.core.DisplayController.OFF_SECONDS);
         display.warmupSeconds = sysPropDouble("debug.wfabia.warmup", -1);
+        display.fastPauseSeconds = sysPropDouble("debug.wfabia.fast", 0.8);
         display.flagWait = sysPropDouble("debug.wfabia.flagwait", 1) > 0;
     }
 
