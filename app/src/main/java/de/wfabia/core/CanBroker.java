@@ -212,6 +212,7 @@ public final class CanBroker {
                     long nowNs = System.nanoTime();
                     if (lastRxNanos != 0 && nowNs - lastRxNanos > BUS_GAP_NANOS) busEpoch.incrementAndGet();   // the bus was silent and speaks again
                     if (!ext && id == ID_TERMINALS && data.length > 0) noteTerminals(data[0] & 0xFF);
+                    if (!ext && id == 0x571 && data.length > 0) noteVoltage(data[0] & 0xFF);
                     if (!ext && id == 0x2E8 && data.length >= 3 && (data[0] & 0xFF) == 0x39 && (data[1] & 0xFF) == 0xC0) answerClusterRequest(nowNs);
                     if (!ext && id == 0x40C && data.length > 0) {
                         int flagNow = data[0] & 0xFF;
@@ -443,6 +444,29 @@ public final class CanBroker {
     }
 
     /** terminal status of the cluster: byte 0 bit0 = key in, bit2 = ACC, bit1 = ignition (15): 01 key in, 05 ACC, 07 ignition on */
+    // ---- battery voltage: frame 0x571 (every 0.5 s), byte 0 = 5 + 0.05 * x volts (11.6 to 12.35 V in the captures, as the head unit read it)
+    private final Object voltLock = new Object();
+    private double voltAvg = Double.NaN, voltShown = Double.NaN;
+    private long voltAt;
+
+    /** smoothed so that the last digit does not flicker: the shown value (0.1 V steps) only moves when the average is 0.08 V away from it */
+    private void noteVoltage(int b0) {
+        double v = 5 + 0.05 * b0;
+        if (v < 8.0) return;   // not a battery voltage (the frame is invalid)
+        synchronized (voltLock) {
+            voltAvg = Double.isNaN(voltAvg) ? v : voltAvg + 0.3 * (v - voltAvg);
+            if (Double.isNaN(voltShown) || Math.abs(voltAvg - voltShown) >= 0.08) voltShown = Math.rint(voltAvg * 10) / 10.0;
+            voltAt = System.nanoTime();
+        }
+    }
+
+    /** the battery voltage in volts, in steps of 0.1; null when the cluster has not sent it for 5 s */
+    public Double voltage() {
+        synchronized (voltLock) {
+            return Double.isNaN(voltShown) || System.nanoTime() - voltAt > 5_000_000_000L ? null : voltShown;
+        }
+    }
+
     private static final int ID_TERMINALS = 0x271;
     private volatile int keyByte = -1;           // 0x271 byte 0: bit 0 key in, bit 1 ignition, bit 2 ACC; -1 = not seen yet
     private volatile long accOnAt, accOffAt;     // nanoTime of the last rise / fall of the ACC bit, 0 = never

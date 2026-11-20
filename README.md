@@ -45,14 +45,14 @@ Open Headunit has to be a build that forwards the frames and has wFabia on its w
 1. Plug the CANable in, then `adb shell dumpsys usb`. Android prints USB ids in decimal: look for `vendor_id=5840` (`16d0`) and `product_id=4478` (`117e`).
 2. Open wFabia. The CAN link card shows the adapter state and a frame counter. The first 300 frames go to logcat: `adb logcat -s wfabia:D`.
 3. If the adapter shows up as `0483:df11` ("DFU in FS Mode"), it is in the STM32 bootloader. wFabia leaves it by itself; the **Exit DFU mode** button does the same by hand.
-4. Cluster: the display card says "linked, session 0x…" and the cluster spells out `MAXINAV` / `AKTIV` letter by letter, then holds it for a moment. This welcome shows once per ignition. After an ignition cycle it links again by itself; when a warning (low fuel, for example) takes the display and drops the session, it links again within about a second, without the welcome.
+4. Cluster: the display card says "linked, session 0x…" and the cluster spells out `MAXINAV` / `AKTIV`, one letter per answer of the cluster, then holds it for a moment. This welcome shows once per ignition. After an ignition cycle it links again by itself; when a warning (low fuel, for example) takes the display and drops the session, it links again within about a second, without the welcome.
 
 ## Using it
 
 - Switches apply at once and persist. Switching a module off releases what it holds.
 - Dependencies: display and bridge need CAN; navigation, lanes, exit names need a source (Zlink or Open Headunit) and navigation; media needs a source or the MediaSession.
 - **Sending is off by default and resets to off when the service restarts.** It needs the *Allow send* switch **and** an id on the allowlist (empty = nothing can be sent). Every frame sent is logged (`adb logcat -s wfabia.tx`). The cluster link's own traffic is exempt. The send switch and the allowlist can only be changed in the app.
-- The speed row shows `0 KM/H` while the GPS speed is 3 km/h or less, and `KEIN GPS` while there is no GPS fix (wRight not delivering, or no speed for 5 s).
+- The speed row shows `0 KM/H` while the GPS speed is 3 km/h or less, and `KEIN GPS` while there is no GPS fix (wRight not delivering, or no speed for 5 s). At a standstill with no navigation or media on the display, the free top row shows the battery voltage, `BATT 12.4V` (the cluster's frame 0x571, byte 0 = 5 + 0.05 x volts).
 - `Serial test` talks to the CANable by hand, with switches for the USB handling variants; `Diagnostics` and `Auto-recovery` are off by default.
 
 ## PC tool

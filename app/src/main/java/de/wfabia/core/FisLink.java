@@ -230,9 +230,13 @@ public final class FisLink implements AutoCloseable {
     }
 
     private volatile String lastReply = "";
+    private volatile byte[] lastReplyBytes;
 
     /** the last content reply as hex, for the log */
     public String lastReply() { return lastReply; }
+
+    /** the last content reply as it came (null: none came to the last message), for the sweep */
+    byte[] lastReplyBytes() { return lastReplyBytes; }
 
     /** Show two rows and report what the cluster said. A definite answer (even a refusal) is final: no second try. */
     public Show show(String top, String bottom) {
@@ -253,11 +257,17 @@ public final class FisLink implements AutoCloseable {
     }
 
     Show streamSendResult(byte[] payload) {
+        return streamSendResult(payload, 2);
+    }
+
+    /** attempts: how often the connection may be opened and the message sent: 2 = one reconnect on any hiccup, 1 = never repeat it */
+    Show streamSendResult(byte[] payload, int attempts) {
         lock.lock();
         c.beginMessage();
         try {
             streamIdleCheck();
-            for (int i = 0; i < 2; i++) {   // one reconnect on any hiccup
+            lastReplyBytes = null;
+            for (int i = 0; i < attempts; i++) {
                 if (!streamOpen) {
                     if (!FisTransport.connect(c)) continue;
                     streamOpen = true;
@@ -268,6 +278,7 @@ public final class FisLink implements AutoCloseable {
                     if (reply != null) {
                         streamLastNanos = System.nanoTime();
                         lastReply = Hex.upper(reply, reply.length);
+                        lastReplyBytes = reply;
                         return classify(reply);
                     }
                 }

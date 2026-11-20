@@ -68,6 +68,9 @@ public final class DisplayController {
     static final double WELCOME_STEP_S = 0.2;
     /** at most this share of the welcome is spent on the letters appearing */
     static final double WELCOME_REVEAL_SHARE = 0.6;
+    /** the loop shows one more letter with every answer of the cluster; the whole welcome may take this many times welcomeSeconds */
+    static final int WELCOME_LETTERS = WELCOME_1.length() + WELCOME_2.length();
+    static final double WELCOME_CAP_FACTOR = 5.0;
 
     public interface SpeedSource {
         /** km/h, or null when unknown. Must be fast and never block. */
@@ -85,6 +88,8 @@ public final class DisplayController {
     public volatile double offSeconds = OFF_SECONDS, warmupSeconds = -1;
     public volatile boolean flagWait = true;
     public volatile double bootSeconds = BOOT_SECONDS;
+    /** debug.wfabia.sweep: run the content-message probe (ContentSweep) once while the display is linked; back to 0 arms it again */
+    public volatile boolean sweepRequested;
     private volatile boolean stopped = true;
     private volatile double welcomeSeconds = 4.0;
     private volatile double quickRelinkSeconds = QUICK_RELINK_S;
@@ -98,7 +103,8 @@ public final class DisplayController {
     private String[] shown;
     private long lastSend;
     private long welcomeUntil;
-    private long welcomeStart;
+    private int welcomeLetters;         // letters of the welcome the cluster has drawn so far
+    private long welcomeFullAt;         // when the last one was drawn, 0 = not yet
     private long welcomedEpoch = -1;   // the bus epoch the welcome was last shown in
     private long quickUntil;           // a quick re-link episode runs until then; 0 = none
     private boolean flagQuickTried;    // a quick re-link for "the cluster sees no radio" was tried since the flag was last seen set
@@ -110,6 +116,7 @@ public final class DisplayController {
     private int regsSinceAbsence;       // registrations since the radio was last gone for the full pause
     private long notReadySince;         // since when the cluster has not answered the connection setup, 0 = it did
     private boolean displayOff;         // the cluster answers "accepted, display off" (ignition not on)
+    private boolean sweepDone;          // the probe ran since sweepRequested was last off
     private boolean lastIgnitionOn = true;
     private long probeUntil;            // after the ignition came back: offer the rows often until then
     private boolean radioOn = true;     // the key has ACC on: the radio runs (key position 0 = the radio is off)
@@ -154,7 +161,7 @@ public final class DisplayController {
     /** how long the quick way may try before the heartbeat pause (tests shorten it) */
     void setQuickRelinkSeconds(double s) { quickRelinkSeconds = s; }
 
-    String[] compute() { return render(nav, options.get(), speed); }
+    String[] compute() { return render(nav, options.get(), speed, broker.voltage()); }
 
     /**
      * The welcome as a little loading bar: the letters of both rows appear one by one in the cells they end up in (MAXINAV,
@@ -163,10 +170,15 @@ public final class DisplayController {
      * @param total   seconds the welcome lasts
      */
     static String[] welcomeRows(double elapsed, double total) {
-        String top = MaxidotRenderer.center(WELCOME_1, MaxidotRenderer.ROW), bottom = MaxidotRenderer.center(WELCOME_2, MaxidotRenderer.ROW);
-        int letters = WELCOME_1.length() + WELCOME_2.length();
+        int letters = WELCOME_LETTERS;
         double reveal = Math.min(WELCOME_STEP_S * letters, WELCOME_REVEAL_SHARE * total);
         int shown = reveal <= 0 ? letters : Math.min(letters, 1 + (int) Math.floor(Math.max(0, elapsed) * letters / reveal + 1e-9));
+        return welcomeRowsFor(shown);
+    }
+
+    /** the welcome with its first n letters on the display (the loop shows one more with every answer of the cluster) */
+    static String[] welcomeRowsFor(int shown) {
+        String top = MaxidotRenderer.center(WELCOME_1, MaxidotRenderer.ROW), bottom = MaxidotRenderer.center(WELCOME_2, MaxidotRenderer.ROW);
         return new String[]{firstLetters(top, shown), firstLetters(bottom, shown - WELCOME_1.length())};
     }
 
@@ -192,9 +204,14 @@ public final class DisplayController {
 
     /** the two rows the cluster shows for the current state (without the welcome); also the preview while no cluster is linked */
     public static String[] render(NavModel nav, MaxidotRenderer.Options o, SpeedSource speed) {
+        return render(nav, o, speed, null);
+    }
+
+    /** the same with the battery voltage (or null), which takes the place of 0 KM/H at a standstill */
+    public static String[] render(NavModel nav, MaxidotRenderer.Options o, SpeedSource speed, Double volts) {
         Feed.View v = nav.view(o.nav, o.media);
         Double sp = o.speed ? speed.kmh() : null;
-        return MaxidotRenderer.screen(v, v.stepElapsed, sp, o);
+        return MaxidotRenderer.screen(v, v.stepElapsed, sp, volts, o);
     }
 
     private void run() {
@@ -375,8 +392,10 @@ public final class DisplayController {
                 notReadySince = 0;
                 if (epoch != welcomedEpoch) {   // the first link of this ignition (or since the display was switched on)
                     welcomedEpoch = epoch;
-                    welcomeStart = now;
-                    welcomeUntil = now + (long) (welcomeSeconds * 1e9);
+                    welcomeLetters = 0;
+                    welcomeFullAt = 0;
+                    // the letters go out one per answer of the cluster, however long that takes; the whole text then holds for a moment
+                    welcomeUntil = now + (long) (welcomeSeconds * WELCOME_CAP_FACTOR * 1e9);
                 } else {
                     welcomeUntil = 0;
                 }
@@ -388,6 +407,7 @@ public final class DisplayController {
                 if (first1 == FisLink.Show.OK) {
                     shown = first;           // the rows went out with the registration
                     lastSend = now;
+                    if (welcomeUntil != 0) welcomeLetters = 1;   // and with them the welcome's first letter
                 } else {
                     shown = null;
                     lastSend = displayOff ? now : 0;
@@ -453,7 +473,10 @@ public final class DisplayController {
         } else {
             flagZeroSince = 0;
         }
-        String[] rows = nowNs < welcomeUntil ? welcomeRows((nowNs - welcomeStart) / 1e9, welcomeSeconds) : compute();
+        boolean welcoming = nowNs < welcomeUntil;
+        int welcomeNext = Math.min(WELCOME_LETTERS, welcomeLetters + 1);   // one more letter each time the cluster has answered
+        boolean paced = false;                                               // the next letter follows at once
+        String[] rows = welcoming ? welcomeRowsFor(welcomeNext) : compute();
         preview.accept(rows);
 
         boolean ignitionOn = broker.ignitionOn();
@@ -465,6 +488,18 @@ public final class DisplayController {
             probeUntil = nowNs + (long) (WAKE_PROBE_FOR_S * 1e9);
         }
         lastIgnitionOn = ignitionOn;
+
+        if (!sweepRequested) sweepDone = false;
+        if (sweepRequested && !sweepDone && !displayOff && shown != null && ignitionOn && broker.accOn() && nowNs >= probeUntil
+            && nowNs >= welcomeUntil && quickUntil == 0 && l.session() != null) {
+            // opt-in experiment: the display is linked and drawing, the key is steady at position 2
+            sweepDone = true;
+            String why = ContentSweep.run(l, () -> sweepRequested && !stopped && broker.ignitionOn() && broker.accOn() && broker.radioFlag() > 0, state);
+            if (why != null) state.accept("sweep ended: " + why);
+            shown = null;
+            lastSend = 0;
+            return true;
+        }
 
         double sinceSend = (nowNs - lastSend) / 1e9;
         boolean due;
@@ -487,6 +522,15 @@ public final class DisplayController {
                     quickUntil = 0;   // the cluster takes rows again: any quick re-link episode is over
                     inactiveOnSince = 0;
                     reappearTried = false;
+                    if (welcoming) {
+                        welcomeLetters = welcomeNext;
+                        if (welcomeLetters < WELCOME_LETTERS) {
+                            paced = true;
+                        } else if (welcomeFullAt == 0) {   // the whole text is on the display: it holds for a moment, then the screen goes on
+                            welcomeFullAt = System.nanoTime();
+                            welcomeUntil = Math.min(welcomeUntil, welcomeFullAt + (long) (welcomeSeconds * (1 - WELCOME_REVEAL_SHARE) * 1e9));
+                        }
+                    }
                     if (displayOff) {
                         displayOff = false;
                         state.accept("linked, session 0x" + Integer.toHexString(l.session()) + ", display on");
@@ -540,7 +584,7 @@ public final class DisplayController {
             inactiveOnSince = 0;
             if (!ignitionOn) reappearTried = false;
         }
-        return tickWait();
+        return paced ? !stopped : tickWait();   // while the welcome spells out, the next letter goes as soon as the cluster has answered
     }
 
     private final Object wake = new Object();

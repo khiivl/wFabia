@@ -86,8 +86,25 @@ With this on the radio is not cut when ACC falls any more (nothing to hide from 
 (read once a second) and brings back the radio that follows ACC (heartbeat off at the ACC fall, back 3 s later plus 2.5 s of power-up, learned upward).
 The stuck-session recovery stays in both modes.
 
+The cluster's `A0 04 8A 85 43 94` read as TP 2.0 timers (top 2 bits: unit 0.1, 1, 10 or 100 ms; low 6 bits: count) is T1..T4 = 100, 50, 3 and 200 ms; ours, `A0 04 82 84 82 B2`, is 20, 40, 20 and 500 ms.
+T1 is how long a sender waits for an ack and T3 the least gap between packets in classic TP 2.0 (the cluster takes 3 ms gaps, even 0); T2 and T4 are normally `FF` there. Unverified.
+
 Next steps if it should be quicker: answer the cluster's `A0` (channel parameters) with `A1 04 82 84 82 B2` on `0x6B9` and ack its data packets, and
 offer the rows sooner after the key returns than the 0.25 s to 1 s probing of the display loop.
+
+## Looking for other display modes (opt-in, off by default)
+
+`adb shell setprop debug.wfabia.sweep 1` (read once a second) runs `ContentSweep` once, as soon as the display is linked and drawing with the key steady at position 2.
+The content message is `09 SS`, line records of 17 bytes (`57 0F LL 00 00 XX 00` and 10 cells), and `08`; the real one has the lines 02 and 03 with XX = 00 and 0A, which
+looks like the offset of the first cell. The sweep sends about 430 messages that differ from it in one respect, each followed by the real message again to check that the
+session still draws: first **lines** (28: other line numbers, one, three or four records instead of two), then **types** (253: every other first byte, but not the init
+and registration types 15 and 02), then **bytes** (149: every single-bit flip, 00, FF and the neighbours of each of the 15 other fixed bytes). The bottom row of a probe says
+what it is (`LINE 4`, `T=0B`, `07=0B`). A refusal (`2B SS 03`) draws nothing and is only counted per group. Any other reply is logged (`sweep: type 0B (37 bytes): reply 27 14 01`) and the
+probe stays on the display for 1.2 s: watch the cluster and write down what changes. It stops at the first message that gets no answer or after which the session no
+longer draws (the display loop then links again as usual); `setprop debug.wfabia.sweep 0` stops it between two messages and arms it again. About 3.5 minutes when
+everything is refused. Log: `adb logcat -d | grep -i sweep`.
+
+Never sent: another session byte, and the init and registration messages (each registration uses up one of the three the cluster allows, so those need a heartbeat pause per try).
 
 ## Simulation
 

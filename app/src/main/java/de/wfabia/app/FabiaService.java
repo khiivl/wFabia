@@ -280,6 +280,7 @@ public class FabiaService extends Service {
         display.flagWait = sysPropDouble("debug.wfabia.flagwait", 1) > 0;
         display.bootSeconds = sysPropDouble("debug.wfabia.boot", de.wfabia.core.DisplayController.BOOT_SECONDS);
         broker.answerC0 = sysPropDouble("debug.wfabia.answerc0", 1) > 0;     // answer the cluster's own setup requests (0 = off)
+        display.sweepRequested = sysPropDouble("debug.wfabia.sweep", 0) > 0; // opt-in probe of the content message (ContentSweep), off unless set
     }
 
     private static double sysPropDouble(String name, double def) {
@@ -326,7 +327,7 @@ public class FabiaService extends Service {
             if (!accOn) { previewIdle = true; return; }
             if (!hub.displayLinked) {
                 try {
-                    hub.rows = DisplayController.render(nav, mods.previewOptions(), speed);
+                    hub.rows = DisplayController.render(nav, mods.previewOptions(), speed, broker.voltage());
                 } catch (RuntimeException e) {
                     Log.w(TAG, "preview: " + e);
                 }

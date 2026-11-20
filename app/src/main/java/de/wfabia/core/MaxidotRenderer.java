@@ -270,12 +270,22 @@ public final class MaxidotRenderer {
         return center(s + " KM/H", ROW);
     }
 
+    /** shown on the free top row at a standstill when no navigation is running: BATT 12.4V */
+    static String voltText(double volts) {
+        return center(String.format(java.util.Locale.ROOT, "BATT %.1fV", volts), ROW);
+    }
+
     /**
      * Feed.View + time -> {row1, row2}, each exactly ROW cells of font characters.
      * @param t   seconds for the exit-name marquee (0 = not scrolled yet)
      * @param speed km/h or null (unknown -> KEIN GPS)
      */
     public static String[] screen(Feed.View state, double t, Double speed, Options o) {
+        return screen(state, t, speed, null, o);
+    }
+
+    /** @param volts the battery voltage or null: shown on the free top row at a standstill (no navigation, no media) */
+    public static String[] screen(Feed.View state, double t, Double speed, Double volts, Options o) {
         if (o == null) o = new Options();
         // where the speed goes: GPS jitter up to STANDSTILL_KMH counts as standing still and shows 0; no speed (no GPS fix, or
         // wRight not delivering) shows KEIN GPS instead of a false 0; blank only if the speed option is switched off
@@ -283,11 +293,13 @@ public final class MaxidotRenderer {
         String speedRow = !o.speed ? blank0
             : speed == null ? center(NO_GPS, ROW)
             : speedText(Math.rint(speed) <= STANDSTILL_KMH ? 0.0 : speed);
+        // standing still with nothing on the top row (no navigation): the battery voltage goes there
+        String topFree = o.speed && speed != null && Math.rint(speed) <= STANDSTILL_KMH && volts != null ? voltText(volts) : blank0;
         if (state.media != null) return mediaRows(state.media);
         ZlinkDecoder.Step st = state.step;
         String blank = spaces(ROW);
         if (!o.nav || !state.active || st == null) {
-            return new String[]{blank, speedRow};
+            return new String[]{topFree, speedRow};
         }
         ZlinkDecoder.Dist nxt = state.next != null ? state.next.dist : null;
         String glyph = maneuverGlyph(st);
