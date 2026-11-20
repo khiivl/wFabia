@@ -20,7 +20,8 @@ import java.util.logging.Logger;
  * The content message is 09 SS, then line records of 17 bytes (57 0F LL 00 00 XX 00 and 10 cells), then 08. The real one has the lines
  * 02 and 03 with XX = 00 and 0A, which looks like the offset of the first cell. A refusal (2B SS 03) draws nothing and costs nothing.
  * Any other reply is logged and the probe stays on the display for a moment: the cluster understands it. It stops at the first message
- * that gets no answer and at the first one after which the session no longer draws. Never sent: another session byte, the init and the
+ * that gets no answer (except a message of another length: the cluster does not ack those, which counts as a refusal) and at the first
+ * one after which the session no longer draws. Never sent: another session byte, the init and the
  * registration messages (each registration would use up one of the three the cluster allows).
  */
 final class ContentSweep {
@@ -162,8 +163,13 @@ final class ContentSweep {
             byte[] reply = l.lastReplyBytes();
             sent++;
             inGroup++;
-            if (r == FisLink.Show.FAILED || reply == null) return "no answer to " + p.what + " (" + sent + " of " + total + ")";
-            if (usualRefusal(reply, s)) {
+            boolean silent = r == FisLink.Show.FAILED || reply == null;
+            if (silent && p.msg.length == base.length) return "no answer to " + p.what + " (" + sent + " of " + total + ")";
+            if (silent) {
+                // a message of another length: the cluster does not even ack its packets (measured on the car with 20 bytes), which is
+                // its way of refusing it; the real message below shows whether the session is still fine
+                refused++;
+            } else if (usualRefusal(reply, s)) {
                 refused++;
             } else {
                 notRefused++;
