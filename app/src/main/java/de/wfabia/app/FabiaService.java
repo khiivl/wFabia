@@ -261,6 +261,9 @@ public class FabiaService extends Service {
             ctl.post(() -> {
                 accOn = on;
                 hub.accOn = on;
+                // not at ACC_OFF (the companion app would take that for the lights going off before it has seen ACC_OFF), but at
+                // ACC_ON: what is held now is from before the sleep and is not the car's state until a frame says so
+                if (on) hub.vehicle.invalidate();
                 apply();
                 if (on && tickerIdle) { tickerIdle = false; ctl.post(ticker); }
                 if (on && previewIdle) { previewIdle = false; ctl.post(previewTicker); }

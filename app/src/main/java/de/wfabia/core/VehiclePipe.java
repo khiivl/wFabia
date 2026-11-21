@@ -109,6 +109,20 @@ public final class VehiclePipe {
         maybePublish(clock.getAsLong(), true);
     }
 
+    /**
+     * Drops the held state: until a frame arrives again the pipe says "invalid". Called at ACC_ON. The held state is the one
+     * from before ACC_OFF, and nothing else would take it back: the ticker is idle while the ignition is off, and the stale
+     * test counts in System.nanoTime(), which does not advance while the unit is suspended - a night's sleep can look like
+     * a few milliseconds. With the CANable disconnected no frame ever comes to replace it, so the last state of the previous
+     * drive would be reported as the car's.
+     */
+    public void invalidate() {
+        filter.reset();
+        lastSampleMs = Long.MIN_VALUE;
+        dirty = true;
+        maybePublish(clock.getAsLong(), true);
+    }
+
     /** about once a second from the service ticker: stale detection and the keepalive */
     public void tick() {
         long now = clock.getAsLong();

@@ -104,6 +104,36 @@ public class VehiclePipeTest {
         assertTrue(pipe.current().lightsOn);
     }
 
+    @Test public void invalidateDropsTheHeldStateEvenWhenTheClockDidNotAdvance() {
+        List<VehiclePipe.State> got = Collections.synchronizedList(new ArrayList<>());
+        pipe.addSink(got::add);
+        pipe.setCanUp(true);
+        feed(70, 40);
+        assertTrue(pipe.current().valid);
+        assertTrue(pipe.current().lightsOn);
+        // a suspend: the monotonic clock stands still, so tick() never finds the signal stale
+        pipe.tick();
+        assertTrue(pipe.current().valid);
+        pipe.invalidate();
+        assertFalse(pipe.current().valid);
+        assertFalse(pipe.current().lightsOn);
+        assertEquals(0, pipe.current().level);
+        feed(70, 5);                                  // and the real frames bring it back
+        assertTrue(pipe.current().valid);
+        assertTrue(pipe.current().lightsOn);
+        pipe.stop();
+    }
+
+    @Test public void invalidateWithTheAdapterGoneStaysInvalid() {
+        pipe.setCanUp(true);
+        feed(70, 40);
+        pipe.invalidate();                            // ACC_ON, the CANable is not there: no frame follows
+        clock.addAndGet(60_000);
+        pipe.tick();
+        assertFalse(pipe.current().valid);
+        assertFalse(pipe.current().lightsOn);
+    }
+
     @Test public void fallbackIdIsUsedOnlyUntilTheMainIdAppears() {
         pipe.setCanUp(true);
         for (int i = 0; i < 40; i++) {
