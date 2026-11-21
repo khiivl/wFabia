@@ -86,9 +86,9 @@ public class FabiaService extends Service {
         broker = new CanBroker(usb, new CanBroker.Status() {
             @Override public void onLink(boolean up, String detail) {
                 hub.canUp = up;
-                // closing the adapter for ACC_OFF is not a lost signal: the companion app (wRight) gets the last state until it goes
-                // stale on its own, not an instant "invalid" that it could take for the lights going off before it has seen ACC_OFF
-                if (up || hub.accOn) hub.vehicle.setCanUp(up);
+                // the link going down - the CANable removed, or the adapter closed for ACC_OFF - makes the state invalid at once; the
+                // companion app (wRight) treats "invalid" as lights off
+                hub.vehicle.setCanUp(up);
                 hub.canState = up ? ("open".equals(detail) ? "adapter open, 100 kbit/s" : "adapter open: " + detail) : detail;
                 Log.i(TAG, "CAN link " + (up ? "up" : "down: " + detail));
             }
@@ -261,9 +261,11 @@ public class FabiaService extends Service {
             ctl.post(() -> {
                 accOn = on;
                 hub.accOn = on;
-                // not at ACC_OFF (the companion app would take that for the lights going off before it has seen ACC_OFF), but at
-                // ACC_ON: what is held now is from before the sleep and is not the car's state until a frame says so
-                if (on) hub.vehicle.invalidate();
+                // The lights state is dropped with the ignition (and again at ACC_ON, for a wake whose ACC_OFF was missed): the
+                // pipe says "invalid" until a frame from the CANable says otherwise, and wRight turns the lights on only then.
+                // Nothing else would clear it - the ticker is idle while the ignition is off, and the stale test counts in
+                // System.nanoTime(), which does not advance during a suspend.
+                hub.vehicle.invalidate();
                 apply();
                 if (on && tickerIdle) { tickerIdle = false; ctl.post(ticker); }
                 if (on && previewIdle) { previewIdle = false; ctl.post(previewTicker); }

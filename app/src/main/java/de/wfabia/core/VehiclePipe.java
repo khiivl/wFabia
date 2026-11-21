@@ -110,11 +110,11 @@ public final class VehiclePipe {
     }
 
     /**
-     * Drops the held state: until a frame arrives again the pipe says "invalid". Called at ACC_ON. The held state is the one
-     * from before ACC_OFF, and nothing else would take it back: the ticker is idle while the ignition is off, and the stale
-     * test counts in System.nanoTime(), which does not advance while the unit is suspended - a night's sleep can look like
-     * a few milliseconds. With the CANable disconnected no frame ever comes to replace it, so the last state of the previous
-     * drive would be reported as the car's.
+     * Drops the held state: until a frame arrives again the pipe says "invalid", and the companion app (wRight) takes that for
+     * lights off. Called at ACC_OFF (the lights state is dropped with the ignition) and again at ACC_ON. Nothing else would
+     * take the state back: the ticker is idle while the ignition is off, and the stale test counts in System.nanoTime(), which
+     * does not advance while the unit is suspended - a night's sleep can look like a few milliseconds. With the CANable
+     * disconnected no frame ever comes to replace it, so the last state of the previous drive would be reported as the car's.
      */
     public void invalidate() {
         filter.reset();
