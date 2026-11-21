@@ -28,10 +28,13 @@
             android:name=".app.SerialTestActivity"
             android:exported="false" />
 
-        <!-- starts the service when the CANable is plugged in; the system grants USB access to the app it launches -->
+        <!-- starts the service when the CANable is plugged in; the system grants USB access to the app it launches.
+             Its own task (empty affinity): in wFabia's main task it would bring that task, and so the main screen,
+             to the front every time the adapter re-attaches, which Zlink's USB reset does on every ACC_ON -->
         <activity
             android:name=".app.UsbAttachActivity"
             android:exported="true"
+            android:taskAffinity=""
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:theme="@style/Theme.WFabia.Transparent">
