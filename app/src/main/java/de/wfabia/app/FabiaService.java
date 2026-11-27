@@ -388,7 +388,7 @@ public class FabiaService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, FabiaService.class).setAction(ACTION_STOP), 0);
         return new NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_wfabia)
             .setContentTitle("wFabia")
             .setContentText(text)
             .setOngoing(true)
